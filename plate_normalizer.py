@@ -4,7 +4,7 @@ import wx, wx.html, wx.lib.scrolledpanel
 import sys
 import random
 import os.path
-from normalization import Normalization, DETECT, TRANSFORMATIONS
+from normalization import Normalization, DETECT, TRANSFORMATIONS, PLATE_ALIGNMENTS
 import wxplotpanel
 import traceback
 import numpy as np
@@ -445,15 +445,43 @@ class Parameters(wx.Panel):
         transform_box = wx.StaticBox(self, wx.ID_ANY, 'Data transformation')
         transform_sizer = wx.StaticBoxSizer(transform_box, wx.HORIZONTAL)
         transform_buttons = ([wx.RadioButton(self, -1, TRANSFORMATIONS[0], style=wx.RB_GROUP)]
-                            + [wx.RadioButton(self, -1, label, style=wx.RB_GROUP) for label in TRANSFORMATIONS[1:]])
+                            + [wx.RadioButton(self, -1, label) for label in TRANSFORMATIONS[1:]])
         transform_sizer.Add((1,1), 1)
         for b in transform_buttons:
             transform_sizer.Add(b, 0)
             transform_sizer.Add((1,1), 1)
         transform_buttons[0].Value = 1
 
+        plate_alignment_box = wx.StaticBox(self, wx.ID_ANY, 'Align plates?')
+        plate_alignment_sizer = wx.StaticBoxSizer(plate_alignment_box, wx.VERTICAL)
+        
+        align_when_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        align_plates_buttons = [wx.RadioButton(self, -1, "Never", style=wx.RB_GROUP),
+                                wx.RadioButton(self, -1, "Once"),
+                                wx.RadioButton(self, -1, "Each iteration")]
+        align_when_sizer.Add(wx.StaticText(self, -1, "When to align:"), 0)
+        align_when_sizer.Add((1,1,), 1)
+        for b in align_plates_buttons:
+            align_when_sizer.Add(b, 0)
+            align_when_sizer.Add((1,1), 1)
+        align_plates_buttons[0].Value = 1
+
+        align_how_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        align_how_buttons = ([wx.RadioButton(self, -1, PLATE_ALIGNMENTS[0], style=wx.RB_GROUP)]
+                            + [wx.RadioButton(self, -1, label) for label in PLATE_ALIGNMENTS[1:]])
+        align_how_sizer.Add(wx.StaticText(self, -1, "How to align:"), 0)
+        align_how_sizer.Add((1,1), 1)
+        for b in align_how_buttons:
+            align_how_sizer.Add(b, 0)
+            align_how_sizer.Add((1,1), 1)
+        align_how_buttons[0].Value = 1
+
+        plate_alignment_sizer.Add(align_when_sizer, 0, wx.EXPAND | wx.ALL, 2)
+        plate_alignment_sizer.Add(align_how_sizer, 0, wx.EXPAND | wx.ALL, 2)
+
         self.topsizer = sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(transform_sizer, 0, wx.ALL | wx.EXPAND, 5)
+        sizer.Add(plate_alignment_sizer, 0, wx.ALL | wx.EXPAND, 5)
         self.SetSizer(sizer)
 
         for b in transform_buttons:
