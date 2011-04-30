@@ -1,0 +1,9 @@
+Plate normalization tool, using median polishing and similar
+techniques.  Reads Excel (and eventually INCell XML files).  Will call
+hits for RNAi experiments using the median-of-medians rule (median of
+replicates, median of RNAis targeted to a particular gene).
+
+GUI and command line modes will be supported.
+
+Will also produce sufficient documentation for reproducible research
+(revision information, normalization parameters, input file).
