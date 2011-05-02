@@ -13,12 +13,26 @@ TRANSFORMATIONS = [TRANSFORM_NONE,
                    TRANSFORM_LOGIT_FRACTION,
                    TRANSFORM_LOGIT_PERCENT]
 
-PLATE_ALIGNMENT_NEGATIVE_CONTROLS = "Negative Controls"
-PLATE_ALIGNMENT_POPULATION = "All But Controls"
-PLATE_ALIGNMENT_EVERYTHING = "All Wells"
-PLATE_ALIGNMENTS = [PLATE_ALIGNMENT_NEGATIVE_CONTROLS,
-                    PLATE_ALIGNMENT_POPULATION,
-                    PLATE_ALIGNMENT_EVERYTHING]
+ALIGN_NEVER = "Never"
+ALIGN_ONCE = "Once"
+ALIGN_EACH = "Each iteration"
+ALIGN_WHEN = [ALIGN_NEVER,
+              ALIGN_ONCE,
+              ALIGN_EACH]
+
+ALIGN_NEGATIVE_CONTROLS = "Negative Controls"
+ALIGN_POPULATION = "All But Controls"
+ALIGN_EVERYTHING = "All Wells"
+ALIGNMENT_METHODS = [ALIGN_NEGATIVE_CONTROLS,
+                     ALIGN_POPULATION,
+                     ALIGN_EVERYTHING]
+
+CONTROL_POPULATION = "Tested Population"
+CONTROL_NEGATIVE = "Negative Control"
+CONTROL_POSITIVE = "Positive Control"
+CONTROL_TYPES = [CONTROL_POPULATION,
+                 CONTROL_NEGATIVE,
+                 CONTROL_POSITIVE]
 
 def safe_float(s):
     try:
@@ -51,6 +65,11 @@ class Normalization(object):
         self.num_replicates = 0
         self.replicate_features = {}
         self.transformation = TRANSFORMATIONS[0]
+        self.align_when = ALIGN_WHEN[0]
+        self.alignment_method = ALIGNMENT_METHODS[0]
+        self.num_iterations = 1
+        self.gene_to_control_type = {}
+        self.combine_replicates = False
 
         self.file_listeners = []
         self.parsing_listeners = []
@@ -100,6 +119,9 @@ class Normalization(object):
     def fetch_genes(self):
         return self.get_column_values(self.gene_column)
 
+    def fetch_control_types(self):
+        return [self.gene_to_control_type.get(g, CONTROL_POPULATION) for g in self.fetch_genes()]
+
     def ready(self):
         for i in range(self.num_replicates):
             if self.replicate_features.get(i, None) is None:
@@ -114,6 +136,14 @@ class Normalization(object):
     def set_transformation(self, trans):
         assert trans in TRANSFORMATIONS
         self.transformation = trans
+
+    def set_alignment_when(self, w):
+        assert w in ALIGN_WHEN
+        self.align_when = w
+
+    def set_alignment_method(self, m):
+        assert m in ALIGNMENT_METHODS
+        self.alignment_method = m
 
     def transform_data(self, vals):
         if self.transformation == TRANSFORM_NONE:
@@ -155,3 +185,81 @@ class Normalization(object):
         output = np.zeros(self.plate_dims(), np.float)
         output[rows[indices], cols[indices]] = vals[indices]
         return output
+
+    # NORMALIZATION CODE
+    # - self.normalization_* variables hold temporary results.
+    # In particular, the steps of normalization are kept in
+    # self.normalization_plate_values, a dictionary indexed by
+    # (platename, repindex).
+
+    def normalization_align_plates(self):
+        # compute an offset per-plate and per-replicate
+        offsets = {}
+        for (plate, repindex), values in self.normalization_plate_values.iteritems():
+            control_map = self.normalization_control_maps[plate]
+            if self.alignment_method == ALIGN_NEGATIVE_CONTROLS:
+                align_values = values[control_map == CONTROL_NEGATIVE]
+            elif self.alignment_method == ALIGN_POPULATION:
+                align_values = values[control_map == CONTROL_POPULATION]
+            elif self.alignment_method == ALIGN_EVERYTHING:
+                align_values = values
+            else:
+                assert False, "Unknown normalization method: %s"%(self.alignement_method)
+            assert len(align_values) > 0, "No valid wells on plate %s and replicate %d for alignment %s"%(plate, repindex + 1, self.alignement_method)
+            offsets[plate, repindex] = np.median(align_values)
+        # shift offsets to zero-median to keep things identifiable
+        if self.combine_replicates:
+            global_shift = np.median(offsets.values())
+
+            print "	", offsets
+            print "	global: ", global_shift
+            return dict(((plate, repindex), values - (offsets[plate, repindex] - global_shift))
+                        for ((plate, repindex), values) in self.normalization_plate_values.iteritems())
+        else:
+            replicate_indices = np.array([repindex for _, repindex in offsets])
+            offset_vals = np.array(offsets.values())
+            per_replicate_shifts = dict((repindex, np.median(offset_vals[replicate_indices == repindex])) for repindex in range(self.num_replicates))
+            print "	", offsets
+            print "	per-rep: ", per_replicate_shifts
+            return dict(((plate, repindex), values - (offsets[plate, repindex] - per_replicate_shifts[repindex]))
+                        for ((plate, repindex), values) in self.normalization_plate_values.iteritems())
+
+    def normalization_shift_rows(self):
+        return self.normalization_plate_values
+
+    def normalization_shift_columns(self):
+        return self.normalization_plate_values
+
+    def run_normalization(self):
+        self.normalization_plate_values = {}
+        self.normalization_control_maps = {}
+        rows = np.array([ord(r) - ord('A') for r in self.fetch_rows()])
+        cols = np.array([int(c) - 1 for c in self.fetch_cols()])
+
+        plate_names = np.array([v for v in self.get_column_values(self.plate_column)], dtype=object)
+        for repindex in range(self.num_replicates):
+            vals = np.array(self.get_replicate_data(repindex, True))
+            for plate_name in set(plate_names):
+                # fetch transformed values
+                temp = np.zeros(self.plate_dims(), dtype=np.float)
+                mask = (plate_names == plate_name)
+                temp[rows[mask], cols[mask]] = vals[mask]
+                self.normalization_plate_values[plate_name, repindex] = temp
+
+        control_types = np.array(self.fetch_control_types(), dtype=object)
+        for plate_name in set(plate_names):
+            temp = np.zeros(self.plate_dims(), dtype=object)
+            mask = (plate_names == plate_name)
+            temp[rows[mask], cols[mask]] = control_types[mask]
+            self.normalization_control_maps[plate_name] = temp
+
+        for iteration in range(self.num_iterations):
+            print self.align_when, iteration
+            if (self.align_when == ALIGN_EACH) or (self.align_when == ALIGN_ONCE and iteration == 0):
+                print "prep align"
+                self.normalization_plate_values = self.normalization_align_plates()
+                if iteration == 0:
+                    self.normalization_first_alignment = self.normalization_plate_values
+            # XXX - shift control populations
+            self.normalization_plate_values = self.normalization_shift_rows()
+            self.normalization_plate_values = self.normalization_shift_columns()
