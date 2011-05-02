@@ -4,7 +4,7 @@ import wx, wx.html, wx.lib.scrolledpanel
 import sys
 import random
 import os.path
-from normalization import Normalization, DETECT, TRANSFORMATIONS, PLATE_ALIGNMENTS
+from normalization import Normalization, DETECT, TRANSFORMATIONS, ALIGN_WHEN, ALIGNMENT_METHODS
 import wxplotpanel
 import traceback
 import numpy as np
@@ -73,6 +73,9 @@ class ColumnSelector(wx.Panel):
         # find sheet and column names
         self.sheet_selector.Clear()
         self.sheet_selector.AppendItems(self.normalization.book.sheet_names())
+        newevt = wx.PyCommandEvent(wx.wxEVT_COMMAND_COMBOBOX_SELECTED)
+        newevt.SetInt(0)
+        wx.PostEvent(self.sheet_selector, newevt)
 
     def select_sheet(self, evt):
         sheet_idx = evt.GetSelection()
@@ -130,7 +133,7 @@ class PlateLayout(wx.Panel):
 
         plate_column_box = wx.StaticBox(self, wx.ID_ANY, 'Plate column in spreadsheet')
         plate_column_sizer = wx.StaticBoxSizer(plate_column_box, wx.VERTICAL)
-        plate_column_selector = ColumnSelector(self, self.set_plate_column, 'plate', self.normalization)
+        plate_column_selector = ColumnSelector(self, self.set_plate_column, 'plate num', self.normalization)
         plate_column_sizer.Add(plate_column_selector, 0, wx.EXPAND)
 
         well_column_box = wx.StaticBox(self, wx.ID_ANY, 'Well column(s) in spreadsheet')
@@ -331,6 +334,8 @@ class Controls(wx.Panel):
         self.SetSizer(sizer)
         self.Layout()
 
+        # XXX BIND change normalization
+
         self.normalization.parsing_listeners.append(self.update)
 
     def update(self):
@@ -454,21 +459,20 @@ class Parameters(wx.Panel):
 
         plate_alignment_box = wx.StaticBox(self, wx.ID_ANY, 'Align plates?')
         plate_alignment_sizer = wx.StaticBoxSizer(plate_alignment_box, wx.VERTICAL)
-        
+
         align_when_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        align_plates_buttons = [wx.RadioButton(self, -1, "Never", style=wx.RB_GROUP),
-                                wx.RadioButton(self, -1, "Once"),
-                                wx.RadioButton(self, -1, "Each iteration")]
+        align_when_buttons = ([wx.RadioButton(self, -1, ALIGN_WHEN[0], style=wx.RB_GROUP)]
+                                + [wx.RadioButton(self, -1, label) for label in ALIGN_WHEN[1:]])
         align_when_sizer.Add(wx.StaticText(self, -1, "When to align:"), 0)
         align_when_sizer.Add((1,1,), 1)
-        for b in align_plates_buttons:
+        for b in align_when_buttons:
             align_when_sizer.Add(b, 0)
             align_when_sizer.Add((1,1), 1)
-        align_plates_buttons[0].Value = 1
+        align_when_buttons[0].Value = 1
 
         align_how_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        align_how_buttons = ([wx.RadioButton(self, -1, PLATE_ALIGNMENTS[0], style=wx.RB_GROUP)]
-                            + [wx.RadioButton(self, -1, label) for label in PLATE_ALIGNMENTS[1:]])
+        align_how_buttons = ([wx.RadioButton(self, -1, ALIGNMENT_METHODS[0], style=wx.RB_GROUP)]
+                            + [wx.RadioButton(self, -1, label) for label in ALIGNMENT_METHODS[1:]])
         align_how_sizer.Add(wx.StaticText(self, -1, "How to align:"), 0)
         align_how_sizer.Add((1,1), 1)
         for b in align_how_buttons:
@@ -487,9 +491,20 @@ class Parameters(wx.Panel):
         for b in transform_buttons:
             b.Bind(wx.EVT_RADIOBUTTON, self.update_transform)
 
+        for b in align_when_buttons:
+            b.Bind(wx.EVT_RADIOBUTTON, self.update_alignment_when)
+
+        for b in align_how_buttons:
+            b.Bind(wx.EVT_RADIOBUTTON, self.update_alignment_method)
+
     def update_transform(self, evt):
-        normalization.set_transformation(evt.EventObject.Label)
-        print " update", evt
+        self.normalization.set_transformation(evt.EventObject.Label)
+
+    def update_alignment_when(self, evt):
+        self.normalization.set_alignment_when(evt.EventObject.Label)
+
+    def update_alignment_method(self, evt):
+        self.normalization.set_alignment_method(evt.EventObject.Label)
 
 
 class Plot(wxplotpanel.PlotPanel):
@@ -567,6 +582,31 @@ class TransformedPlates(Plot):
                 subplot.set_title(plate_name)
         self.figure.suptitle('transformed%s'%(' (invalid values discarded)' if bad_data else ''))
 
+class AlignedPlates(Plot):
+    def do_draw(self):
+        bad_data = False
+        plotidx = 0
+        try:
+            self.normalization.run_normalization()
+        except Exception, e:
+            print e
+            import pdb
+            pdb.post_mortem(sys.exc_traceback)
+        for plate_name in self.normalization.plate_names():
+            for rep in range(self.normalization.num_replicates):
+                plotidx += 1
+                subplot = self.figure.add_subplot(self.normalization.num_plates(), self.normalization.num_replicates, plotidx)
+                try:
+                    data = self.normalization_first_alignment[plate_name, rep]
+                    if np.any(~ np.isfinite(data)):
+                        bad_data = True
+                    subplot.matshow(data)
+                except:
+                    print plate_name, rep
+                    traceback.print_exc()
+                    pass
+                subplot.set_title(plate_name)
+        self.figure.suptitle('transformed and aligned%s'%(' (invalid values discarded)' if bad_data else ''))
 
 class CleanedPlot(Plot):
     def do_draw(self):
@@ -588,6 +628,7 @@ class Plots(wx.Panel):
         self.panels['original platemaps'] = OriginalPlates(subpanel, normalization, color=(255,255,255))
         self.panels['transformed data'] = TransformedHistograms(subpanel, normalization, color=(255,255,255))
         self.panels['transformed platemaps'] = TransformedPlates(subpanel, normalization, color=(255,255,255))
+        self.panels['aligned platemaps'] = AlignedPlates(subpanel, normalization, color=(255,255,255))
         self.panels['cleaned data'] = CleanedPlot(subpanel, normalization, color=(255,255,255))
 
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -595,6 +636,7 @@ class Plots(wx.Panel):
         sizer.Add(self.panels['original platemaps'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['transformed data'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['transformed platemaps'], 1, wx.ALL | wx.EXPAND, 1)
+        sizer.Add(self.panels['aligned platemaps'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned data'], 1, wx.ALL | wx.EXPAND, 1)
         subpanel.SetSizer(sizer)
 
@@ -623,7 +665,7 @@ class Plots(wx.Panel):
 
 class Frame(wx.Frame):
     def __init__(self, title, normalization):
-        wx.Frame.__init__(self, None, title=title, size=(600,300))
+        wx.Frame.__init__(self, None, title=title, size=(600, 600))
         self.normalization = normalization
         self.appname = title
 
@@ -679,11 +721,15 @@ class Frame(wx.Frame):
                 title += ' -> %s'%(os.path.basename(self.normalization.output_file))
         self.Title = title
 
+def main():
+    normalization = Normalization()
+    if len(sys.argv) > 1:
+        normalization.set_input_file(sys.argv[1])
+    app = wx.App(redirect=False)
+    top = Frame(app_name, normalization)
+    top.Centre()
+    top.Show()
+    app.MainLoop()
 
-normalization = Normalization()
-if len(sys.argv) > 1:
-    normalization.set_input_file(sys.argv[1])
-app = wx.App(redirect=False)
-top = Frame(app_name, normalization)
-top.Show()
-app.MainLoop()
+if __name__ == "__main__":
+    main()
