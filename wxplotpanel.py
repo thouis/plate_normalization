@@ -2,7 +2,10 @@
 import matplotlib
 matplotlib.interactive(True)
 matplotlib.use('WXAgg')
+from mpl_toolkits.axes_grid1 import ImageGrid
 import wx
+import matplotlib.colors
+
 
 class PlotPanel (wx.Panel):
     """The PlotPanel has a Figure and a Canvas. OnSize events simply set a 
@@ -54,13 +57,18 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
             self._SetSize()
 
     def _SetSize(self):
-        pixels = self.ClientSize
-        self.canvas.SetSize(pixels)
-        # self.figure.set_size_inches(float(pixels[0]) / self.figure.get_dpi(),
-        # float(pixels[1]) / self.figure.get_dpi())
-        print pixels
+        self.canvas.SetSize(self.ClientSize)
         self.draw()
 
-    def draw(self): 
+    def draw(self):
         raise NoImplementedError # abstract, to be overridden by child classes
 
+    def image_grid(self, num_rows, num_cols):
+        return ImageGrid(self.figure, 111,
+                         nrows_ncols = (num_rows, num_cols),
+                         cbar_size = "3%",
+                         cbar_pad = 0.02,
+                         cbar_mode = 'single')
+
+    def get_norm(self, vmin, vmax):
+        return matplotlib.colors.normalize(vmax=vmax, vmin=vmin)

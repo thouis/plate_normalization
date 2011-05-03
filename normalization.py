@@ -70,6 +70,7 @@ class Normalization(object):
         self.num_iterations = 1
         self.gene_to_control_type = {}
         self.combine_replicates = False
+        self.iterations = 10
 
         self.file_listeners = []
         self.parsing_listeners = []
@@ -132,6 +133,9 @@ class Normalization(object):
         self.replicate_features[index] = val
         if self.ready():
             self.feature_selection_finished()
+
+    def set_iterations(self, val):
+        self.iterations = val
 
     def set_transformation(self, trans):
         assert trans in TRANSFORMATIONS
@@ -204,8 +208,8 @@ class Normalization(object):
             elif self.alignment_method == ALIGN_EVERYTHING:
                 align_values = values
             else:
-                assert False, "Unknown normalization method: %s"%(self.alignement_method)
-            assert len(align_values) > 0, "No valid wells on plate %s and replicate %d for alignment %s"%(plate, repindex + 1, self.alignement_method)
+                assert False, "Unknown normalization method: %s"%(self.alignment_method)
+            assert len(align_values) > 0, "No valid wells on plate %s and replicate %d for alignment using %s"%(plate, repindex + 1, self.alignment_method)
             offsets[plate, repindex] = np.median(align_values)
         # shift offsets to zero-median to keep things identifiable
         if self.combine_replicates:
@@ -259,6 +263,7 @@ class Normalization(object):
                 print "prep align"
                 self.normalization_plate_values = self.normalization_align_plates()
                 if iteration == 0:
+                    print "here"
                     self.normalization_first_alignment = self.normalization_plate_values
             # XXX - shift control populations
             self.normalization_plate_values = self.normalization_shift_rows()

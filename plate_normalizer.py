@@ -72,7 +72,9 @@ class ColumnSelector(wx.Panel):
     def input_file_updated(self):
         # find sheet and column names
         self.sheet_selector.Clear()
-        self.sheet_selector.AppendItems(self.normalization.book.sheet_names())
+        names = self.normalization.book.sheet_names()
+        self.sheet_selector.AppendItems(names)
+        self.sheet_selector.Value = names[0]
         newevt = wx.PyCommandEvent(wx.wxEVT_COMMAND_COMBOBOX_SELECTED)
         newevt.SetInt(0)
         wx.PostEvent(self.sheet_selector, newevt)
@@ -158,6 +160,10 @@ class PlateLayout(wx.Panel):
         status_sizer = wx.StaticBoxSizer(status_box, wx.VERTICAL)
         self.status_text = wx.StaticText(self, -1, "Choose settings above...")
         status_sizer.Add(self.status_text, 0, wx.EXPAND)
+
+        # make things align
+        self.status_text.SetFont(wx.Font(pointSize=-1, family=wx.FONTFAMILY_MODERN,
+                                         style= wx.FONTSTYLE_NORMAL, weight=wx.FONTWEIGHT_NORMAL))
 
         wells_combined.Value = True
         self.well_column_sizer.Hide(self.wellrow_selector)
@@ -290,7 +296,7 @@ class PlateLayout(wx.Panel):
             # report top 10 genes by count
             countgenes = sorted([(c, g) for g, c in gene_counts.iteritems()])[-10:][::-1]
             gene_counts_text = "\n".join(["Number of wells per gene, top 10:"] + 
-                                         ["   %s : %d"%(g, c) for (c, g) in countgenes])
+                                         ["%12s : %d"%(g, c) for (c, g) in countgenes])
 
             status = "\n".join(["Plate Type: %s%s" %(plate_shape, autodetected),
                                 "Number of plates: %d"%(len(wells_per_plate)),
@@ -447,6 +453,14 @@ class Parameters(wx.Panel):
         wx.Panel.__init__(self, parent=parent)
         self.normalization = normalization
 
+        iterations_box = wx.StaticBox(self, wx.ID_ANY, '')
+        iterations_sizer = wx.StaticBoxSizer(iterations_box, wx.HORIZONTAL)
+        iterations_control = wx.SpinCtrl(self, -1, value=str(self.normalization.iterations), min=0, max=20, initial=self.normalization.iterations)
+        iterations_sizer.Add((1,1), 1)
+        iterations_sizer.Add(wx.StaticText(self, -1, "Number of iterations:"), 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 2)
+        iterations_sizer.Add(iterations_control, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 2)
+        iterations_sizer.Add((1,1), 1)
+
         transform_box = wx.StaticBox(self, wx.ID_ANY, 'Data transformation')
         transform_sizer = wx.StaticBoxSizer(transform_box, wx.HORIZONTAL)
         transform_buttons = ([wx.RadioButton(self, -1, TRANSFORMATIONS[0], style=wx.RB_GROUP)]
@@ -473,6 +487,7 @@ class Parameters(wx.Panel):
         align_how_sizer = wx.BoxSizer(wx.HORIZONTAL)
         align_how_buttons = ([wx.RadioButton(self, -1, ALIGNMENT_METHODS[0], style=wx.RB_GROUP)]
                             + [wx.RadioButton(self, -1, label) for label in ALIGNMENT_METHODS[1:]])
+        align_how_sizer.Add(wx.StaticLine(self), 0, wx.EXPAND | wx.ALL, 1)
         align_how_sizer.Add(wx.StaticText(self, -1, "How to align:"), 0)
         align_how_sizer.Add((1,1), 1)
         for b in align_how_buttons:
@@ -484,9 +499,12 @@ class Parameters(wx.Panel):
         plate_alignment_sizer.Add(align_how_sizer, 0, wx.EXPAND | wx.ALL, 2)
 
         self.topsizer = sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(iterations_sizer, 0, wx.ALL | wx.EXPAND, 5)
         sizer.Add(transform_sizer, 0, wx.ALL | wx.EXPAND, 5)
         sizer.Add(plate_alignment_sizer, 0, wx.ALL | wx.EXPAND, 5)
         self.SetSizer(sizer)
+
+        iterations_control.Bind(wx.EVT_SPINCTRL, self.update_iterations)
 
         for b in transform_buttons:
             b.Bind(wx.EVT_RADIOBUTTON, self.update_transform)
@@ -496,6 +514,9 @@ class Parameters(wx.Panel):
 
         for b in align_how_buttons:
             b.Bind(wx.EVT_RADIOBUTTON, self.update_alignment_method)
+
+    def update_iterations(self, evt):
+        self.normalization.set_iterations(evt.EventObject.Value)
 
     def update_transform(self, evt):
         self.normalization.set_transformation(evt.EventObject.Label)
@@ -526,34 +547,66 @@ class Plot(wxplotpanel.PlotPanel):
         else:
             self.do_draw()
 
-class OriginalHistograms(Plot):
+class PlatePlot(Plot):
     def do_draw(self):
-        self.figure.suptitle('original')
-        for rep in range(self.normalization.num_replicates):
-            subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep)
-            subplot.hist(self.normalization.get_replicate_data(rep), 20)
-
-class OriginalPlates(Plot):
-    def do_draw(self):
-        self.figure.suptitle('original')
+        self.pre_draw()
         plotidx = 0
+        bad_data = False
+        grid = self.image_grid(self.normalization.num_plates(), self.normalization.num_replicates)
+        lo = np.inf
+        hi = -np.inf
         for plate_name in self.normalization.plate_names():
             for rep in range(self.normalization.num_replicates):
-                plotidx += 1
-                subplot = self.figure.add_subplot(self.normalization.num_plates(), self.normalization.num_replicates, plotidx)
                 try:
-                    subplot.matshow(self.normalization.plate_array(plate_name, rep))
+                    im = self.get_plate(plate_name, rep)
+                    im = im[np.isfinite(im)]
+                    lo = min(np.min(im), lo)
+                    hi = max(np.max(im), hi)
+                except:
+                    pass
+        norm = self.get_norm(lo, hi)
+        for plate_name in self.normalization.plate_names():
+            for rep in range(self.normalization.num_replicates):
+                try:
+                    im = self.get_plate(plate_name, rep)
+                    if np.any(~ np.isfinite(im)):
+                        bad_data = True
+                    mappable = grid[plotidx].imshow(im, interpolation='nearest', norm=norm)
+                    plotidx += 1
                 except:
                     print plate_name, rep
                     traceback.print_exc()
                     pass
-                subplot.set_title(plate_name)
+        grid[0].cax.colorbar(mappable)
+        self.post_draw(bad_data)
+
+    def pre_draw(self):
+        pass
+    def get_plate(self, plate_name, rep):
+        raise NotImplementedError('need get_plate()')
+    def post_draw(self, bad_data):
+        pass
+
+class OriginalHistograms(Plot):
+    def do_draw(self):
+        self.figure.suptitle('original')
+        for rep in range(self.normalization.num_replicates):
+            subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep + 1)
+            subplot.hist(self.normalization.get_replicate_data(rep), 20)
+
+class OriginalPlates(PlatePlot):
+    def get_plate(self, plate_name, rep):
+        return self.normalization.plate_array(plate_name, rep)
+
+    def post_draw(self, bad_data):
+        self.figure.suptitle('original%s'%(' (invalid values discarded)' if bad_data else ''))
+
 
 class TransformedHistograms(Plot):
     def do_draw(self):
         bad_data = False
         for rep in range(self.normalization.num_replicates):
-            subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep)
+            subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep + 1)
             data = self.normalization.get_replicate_data(rep, transformed=True)
             good_data = data[np.isfinite(data)]
             if np.any(data != good_data):
@@ -562,56 +615,28 @@ class TransformedHistograms(Plot):
                 subplot.hist(good_data, 20)
         self.figure.suptitle('transformed%s'%(' (invalid values discarded)' if bad_data else ''))
 
-class TransformedPlates(Plot):
-    def do_draw(self):
-        bad_data = False
-        plotidx = 0
-        for plate_name in self.normalization.plate_names():
-            for rep in range(self.normalization.num_replicates):
-                plotidx += 1
-                subplot = self.figure.add_subplot(self.normalization.num_plates(), self.normalization.num_replicates, plotidx)
-                try:
-                    data = self.normalization.plate_array(plate_name, rep, transformed=True)
-                    if np.any(~ np.isfinite(data)):
-                        bad_data = True
-                    subplot.matshow(data)
-                except:
-                    print plate_name, rep
-                    traceback.print_exc()
-                    pass
-                subplot.set_title(plate_name)
+class TransformedPlates(PlatePlot):
+    def get_plate(self, plate_name, rep):
+        return self.normalization.plate_array(plate_name, rep, transformed=True)
+
+    def post_draw(self, bad_data):
         self.figure.suptitle('transformed%s'%(' (invalid values discarded)' if bad_data else ''))
 
-class AlignedPlates(Plot):
-    def do_draw(self):
-        bad_data = False
-        plotidx = 0
-        try:
-            self.normalization.run_normalization()
-        except Exception, e:
-            print e
-            import pdb
-            pdb.post_mortem(sys.exc_traceback)
-        for plate_name in self.normalization.plate_names():
-            for rep in range(self.normalization.num_replicates):
-                plotidx += 1
-                subplot = self.figure.add_subplot(self.normalization.num_plates(), self.normalization.num_replicates, plotidx)
-                try:
-                    data = self.normalization_first_alignment[plate_name, rep]
-                    if np.any(~ np.isfinite(data)):
-                        bad_data = True
-                    subplot.matshow(data)
-                except:
-                    print plate_name, rep
-                    traceback.print_exc()
-                    pass
-                subplot.set_title(plate_name)
+
+class AlignedPlates(PlatePlot):
+    def pre_draw(self):
+        self.normalization.run_normalization()
+
+    def get_plate(self, plate_name, rep):
+        return self.normalization.normalization_first_alignment[plate_name, rep]
+
+    def post_draw(self, bad_data):
         self.figure.suptitle('transformed and aligned%s'%(' (invalid values discarded)' if bad_data else ''))
 
 class CleanedPlot(Plot):
     def do_draw(self):
         self.figure.suptitle('cleaned')
-        subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, 0)
+        subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, 1)
         subplot.hist(self.normalization.get_replicate_data(0), 20)
 
 
@@ -631,7 +656,7 @@ class Plots(wx.Panel):
         self.panels['aligned platemaps'] = AlignedPlates(subpanel, normalization, color=(255,255,255))
         self.panels['cleaned data'] = CleanedPlot(subpanel, normalization, color=(255,255,255))
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.panels['original data'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['original platemaps'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['transformed data'], 1, wx.ALL | wx.EXPAND, 1)
@@ -640,7 +665,7 @@ class Plots(wx.Panel):
         sizer.Add(self.panels['cleaned data'], 1, wx.ALL | wx.EXPAND, 1)
         subpanel.SetSizer(sizer)
 
-        self.scroll_window.SetupScrolling(False, True)
+        self.scroll_window.SetupScrolling(True, False)
 
         top_sizer = wx.BoxSizer(wx.VERTICAL)
         top_sizer.Add(self.scroll_window, 1, wx.EXPAND)
@@ -658,10 +683,8 @@ class Plots(wx.Panel):
     def on_size(self, evt):
         height = self.scroll_window.ClientSize[1]
         width = int(height / np.sqrt(2))
-        self.subpanel.Size = (width, height * len(self.panels))
+        self.subpanel.Size = (width * len(self.panels), height)
         self.scroll_window.VirtualSize = self.subpanel.Size
-        # center sub panel
-        self.subpanel.Position = ((self.scroll_window.Size[0] - self.subpanel.Size[0]) / 2, 0)
 
 class Frame(wx.Frame):
     def __init__(self, title, normalization):
