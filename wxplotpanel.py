@@ -2,7 +2,7 @@
 import matplotlib
 matplotlib.interactive(True)
 matplotlib.use('WXAgg')
-from mpl_toolkits.axes_grid1 import ImageGrid
+from mpl_toolkits.axes_grid import ImageGrid
 import wx
 import matplotlib.colors
 
@@ -32,12 +32,10 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
         sizer.Add(self.canvas, 1, wx.EXPAND | wx.SHAPED, 0)
         self.SetSizer(sizer)
 
+        self.Bind(wx.EVT_SIZE, self.set_size)
+        self.Bind(wx.EVT_PAINT, self.on_paint)
         self.draw()
-
-        self._resizeflag = False
-
-        self.Bind(wx.EVT_IDLE, self._onIdle)
-        self.Bind(wx.EVT_SIZE, self._onSize)
+        self.Refresh()
 
     def SetColor(self, rgbtuple=None):
         """Set figure and canvas colours to be the same."""
@@ -48,17 +46,9 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
         self.figure.set_edgecolor(clr)
         self.canvas.SetBackgroundColour(wx.Colour(*rgbtuple))
 
-    def _onSize(self, event):
-        self._resizeflag = True
-
-    def _onIdle(self, evt):
-        if self._resizeflag:
-            self._resizeflag = False
-            self._SetSize()
-
-    def _SetSize(self):
-        self.canvas.SetSize(self.ClientSize)
-        self.draw()
+    def set_size(self, evt=None):
+        if self.ClientSize[0] > 0 and self.ClientSize[1] > 0:
+            self.canvas.SetSize(self.ClientSize)
 
     def draw(self):
         raise NoImplementedError # abstract, to be overridden by child classes
@@ -72,3 +62,6 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
 
     def get_norm(self, vmin, vmax):
         return matplotlib.colors.normalize(vmax=vmax, vmin=vmin)
+
+    def on_paint(self, evt):
+        self.canvas.draw()

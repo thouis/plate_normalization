@@ -345,7 +345,6 @@ class Controls(wx.Panel):
         self.normalization.parsing_listeners.append(self.update)
 
     def update(self):
-        print "updating Controls panel"
         # populate with genes, counts, radiobuttons
         self.row_controls = []
         self.row_sizer.DeleteWindows()
@@ -681,6 +680,7 @@ class Plots(wx.Panel):
             p.draw()
 
     def on_size(self, evt):
+        self.Layout() # allows the first draw to happen
         height = self.scroll_window.ClientSize[1]
         width = int(height / np.sqrt(2))
         self.subpanel.Size = (width * len(self.panels), height)
@@ -707,7 +707,7 @@ class Frame(wx.Frame):
 
         panel = wx.Panel(self)
 
-        notebook = wx.Notebook(panel)
+        notebook = self.notebook = wx.Notebook(panel)
 
         notebook.AddPage(PlateLayout(notebook, self.normalization), "File && Layout")
         notebook.AddPage(Controls(notebook, self.normalization), "Controls")
