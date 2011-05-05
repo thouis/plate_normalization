@@ -8,9 +8,8 @@ import matplotlib.colors
 
 
 class PlotPanel (wx.Panel):
-    """The PlotPanel has a Figure and a Canvas. OnSize events simply set a 
-flag, and the actual resizing of the figure is triggered by an Idle event."""
-    def __init__(self, parent, color=None, dpi=None, **kwargs):
+    """The PlotPanel has a Figure and a Canvas"""
+    def __init__(self, parent, color=(255, 255, 255), dpi=None, **kwargs):
         from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
         from matplotlib.figure import Figure, SubplotParams
 
@@ -33,7 +32,6 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
         self.SetSizer(sizer)
 
         self.Bind(wx.EVT_SIZE, self.set_size)
-        self.Bind(wx.EVT_PAINT, self.on_paint)
         self.draw()
         self.Refresh()
 
@@ -49,6 +47,7 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
     def set_size(self, evt=None):
         if self.ClientSize[0] > 0 and self.ClientSize[1] > 0:
             self.canvas.SetSize(self.ClientSize)
+            self.canvas.draw()
 
     def draw(self):
         raise NoImplementedError # abstract, to be overridden by child classes
@@ -62,6 +61,3 @@ flag, and the actual resizing of the figure is triggered by an Idle event."""
 
     def get_norm(self, vmin, vmax):
         return matplotlib.colors.normalize(vmax=vmax, vmin=vmin)
-
-    def on_paint(self, evt):
-        self.canvas.draw()

@@ -1,6 +1,7 @@
 import xlrd
 import numpy as np
 from welltools import extract_row, extract_col
+from scipy.stats import nanmean, nanmedian
 
 DETECT = 'Detect'
 
@@ -49,6 +50,21 @@ def logit(v):
     lv[v >= 1.0] = np.inf
     return lv
 
+def fix_nans(shift_vals):
+    # some rows or columns might be entirely controls, in which case
+    # we take the normalization from the nearest non-nan rows/columns
+    shift_vals = shift_vals.copy()
+    bad = ~ np.isfinite(shift_vals)
+    assert not all(bad)
+    while any(bad):
+        up = np.roll(shift_vals, 1)
+        down = np.roll(shift_vals, -1)
+        up[0] = np.nan
+        down[-1] = np.nan
+        shift_vals[bad] = nanmean(np.vstack((up, down)), 0)[bad]
+        bad = ~ np.isfinite(shift_vals)
+    return shift_vals
+
 class Normalization(object):
     '''This object communicates the parameters (including input and output files) for a normalization'''
     def __init__(self):
@@ -67,14 +83,19 @@ class Normalization(object):
         self.transformation = TRANSFORMATIONS[0]
         self.align_when = ALIGN_WHEN[0]
         self.alignment_method = ALIGNMENT_METHODS[0]
-        self.num_iterations = 1
+        self.num_iterations = 10
         self.gene_to_control_type = {}
         self.combine_replicates = False
         self.iterations = 10
 
+        # used for fetching values
+        self.cached_book = None
+        self.cached_values = {}
+
         self.file_listeners = []
         self.parsing_listeners = []
         self.feature_selection_listeners = []
+        self.parameter_change_listeners = []
 
     def set_input_file(self, val):
         self.input_file = val
@@ -95,6 +116,10 @@ class Normalization(object):
 
     def feature_selection_finished(self):
         for f in self.feature_selection_listeners:
+            f()
+
+    def parameter_changed(self):
+        for f in self.parameter_change_listeners:
             f()
 
     def get_column_values(self, column_specifier):
@@ -136,18 +161,22 @@ class Normalization(object):
 
     def set_iterations(self, val):
         self.iterations = val
+        self.parameter_changed()
 
     def set_transformation(self, trans):
         assert trans in TRANSFORMATIONS
         self.transformation = trans
+        self.parameter_changed()
 
     def set_alignment_when(self, w):
         assert w in ALIGN_WHEN
         self.align_when = w
+        self.parameter_changed()
 
     def set_alignment_method(self, m):
         assert m in ALIGNMENT_METHODS
         self.alignment_method = m
+        self.parameter_changed()
 
     def transform_data(self, vals):
         if self.transformation == TRANSFORM_NONE:
@@ -160,11 +189,19 @@ class Normalization(object):
             return logit(vals / 100.0)
 
     def get_replicate_data(self, repindex, transformed=False):
-        vals = np.array([safe_float(v) for v in self.get_column_values(self.replicate_features[repindex])])
-        if transformed:
-            vals = self.transform_data(vals)
-        print "trna", vals.min(), vals.max()
-        return vals
+        if self.book != self.cached_book:
+            self.cached_values = {}
+            self.cached_book = self.book
+        key = (self.replicate_features[repindex], transformed and self.transformation)
+        if not key in self.cached_values:
+            vals = np.array([safe_float(v) for v in self.get_column_values(self.replicate_features[repindex])])
+            if transformed:
+                vals = self.transform_data(vals)
+            print "miss"
+            self.cached_values[key] = vals
+        else:
+            print "hit"
+        return self.cached_values[key]
 
     def num_plates(self):
         return len(set(self.get_column_values(self.plate_column)))
@@ -228,11 +265,35 @@ class Normalization(object):
             return dict(((plate, repindex), values - (offsets[plate, repindex] - per_replicate_shifts[repindex]))
                         for ((plate, repindex), values) in self.normalization_plate_values.iteritems())
 
+    def normalization_shift_rows_or_cols(self, axis, stacker):
+        endshape = [-1, -1]
+        endshape[axis] = 1
+        if self.combine_replicates:
+            all_plates = stacker(self.normalization_plate_values.keys())
+            controls = (stacker([self.normalization_control_maps[pl] for pl, _ in self.normalization_plate_values.keys()]) != CONTROL_POPULATION)
+            all_plates[controls] = np.nan
+            offsets = fix_nans(nanmedian(all_plates, axis))
+            # shift offsets to zero-median to keep things identifiable
+            offsets -= np.median(offsets)
+            return dict(((plate, repindex), values - offsets.reshape(endshape))
+                        for ((plate, repindex), values) in self.normalization_plate_values.iteritems())
+        else:
+            offsets = {}
+            for repindex in range(self.num_replicates):
+                rep_plates = stacker([v for (_, rep), v in self.normalization_plate_values.iteritems() if repindex == rep])
+                controls = (stacker([self.normalization_control_maps[pl] for pl, rep in self.normalization_plate_values.keys() if repindex == rep]) != CONTROL_POPULATION)
+                rep_plates[controls] = np.nan
+                offsets[repindex] = fix_nans(nanmedian(rep_plates, axis))
+                # shift offsets to zero-median to keep things identifiable
+                offsets[repindex] -= np.median(offsets[repindex])
+            return dict(((plate, repindex), values - offsets[repindex].reshape(endshape))
+                        for ((plate, repindex), values) in self.normalization_plate_values.iteritems())
+
     def normalization_shift_rows(self):
-        return self.normalization_plate_values
+        return self.normalization_shift_rows_or_cols(1, np.hstack)
 
     def normalization_shift_columns(self):
-        return self.normalization_plate_values
+        return self.normalization_shift_rows_or_cols(0, np.vstack)
 
     def run_normalization(self):
         self.normalization_plate_values = {}
@@ -260,11 +321,11 @@ class Normalization(object):
         for iteration in range(self.num_iterations):
             print self.align_when, iteration
             if (self.align_when == ALIGN_EACH) or (self.align_when == ALIGN_ONCE and iteration == 0):
-                print "prep align"
                 self.normalization_plate_values = self.normalization_align_plates()
-                if iteration == 0:
-                    print "here"
-                    self.normalization_first_alignment = self.normalization_plate_values
+            if iteration == 0:
+                self.normalization_first_alignment = self.normalization_plate_values
+            
             # XXX - shift control populations
             self.normalization_plate_values = self.normalization_shift_rows()
             self.normalization_plate_values = self.normalization_shift_columns()
+            print "nrom norm"
