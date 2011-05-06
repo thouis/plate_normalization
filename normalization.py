@@ -88,9 +88,11 @@ class Normalization(object):
         self.combine_replicates = False
         self.iterations = 10
 
-        # used for fetching values
+        # used for fetching columns
         self.cached_book = None
         self.cached_values = {}
+
+        self.need_renorm = True
 
         self.file_listeners = []
         self.parsing_listeners = []
@@ -115,17 +117,22 @@ class Normalization(object):
             f()
 
     def feature_selection_finished(self):
+        self.need_renorm = True
         for f in self.feature_selection_listeners:
             f()
 
     def parameter_changed(self):
+        self.need_renorm = True
         for f in self.parameter_change_listeners:
             f()
 
     def get_column_values(self, column_specifier):
-        # import pdb
-        # pdb.set_trace()
-        return [cell.value for cell in self.book.sheet_by_index(column_specifier[0]).col(column_specifier[1])[1:]]
+        if self.book != self.cached_book:
+            self.cached_values = {}
+            self.cached_book = self.book
+        if column_specifier not in self.cached_values:
+            self.cached_values[column_specifier] = [cell.value for cell in self.book.sheet_by_index(column_specifier[0]).col(column_specifier[1])[1:]]
+        return self.cached_values[column_specifier]
 
     def fetch_plates(self):
         return self.get_column_values(self.plate_column)
@@ -147,6 +154,9 @@ class Normalization(object):
 
     def fetch_control_types(self):
         return [self.gene_to_control_type.get(g, CONTROL_POPULATION) for g in self.fetch_genes()]
+
+    def set_control_type(self, gene, control_type):
+        self.gene_to_control_type[gene] = control_type
 
     def ready(self):
         for i in range(self.num_replicates):
@@ -189,19 +199,10 @@ class Normalization(object):
             return logit(vals / 100.0)
 
     def get_replicate_data(self, repindex, transformed=False):
-        if self.book != self.cached_book:
-            self.cached_values = {}
-            self.cached_book = self.book
-        key = (self.replicate_features[repindex], transformed and self.transformation)
-        if not key in self.cached_values:
-            vals = np.array([safe_float(v) for v in self.get_column_values(self.replicate_features[repindex])])
-            if transformed:
-                vals = self.transform_data(vals)
-            print "miss"
-            self.cached_values[key] = vals
-        else:
-            print "hit"
-        return self.cached_values[key]
+        vals = np.array([safe_float(v) for v in self.get_column_values(self.replicate_features[repindex])])
+        if transformed:
+            vals = self.transform_data(vals)
+        return vals
 
     def num_plates(self):
         return len(set(self.get_column_values(self.plate_column)))
@@ -218,6 +219,8 @@ class Normalization(object):
         return (16, 24) if self.plate_shape() == "384" else (8, 12)
 
     def plate_array(self, plate_name, repindex, transformed=False):
+        if isinstance(plate_name, int):
+            plate_name = self.plate_names()[plate_name]
         plate_mask = np.array([v == plate_name for v in self.get_column_values(self.plate_column)])
         indices = plate_mask.nonzero()[0]
         rows = np.array([ord(r) - ord('A') for r in self.fetch_rows()])
@@ -234,6 +237,7 @@ class Normalization(object):
     # (platename, repindex).
 
     def normalization_align_plates(self):
+        # XXX - should not shift plates that are more than half filled by controls
         # compute an offset per-plate and per-replicate
         offsets = {}
         for (plate, repindex), values in self.normalization_plate_values.iteritems():
@@ -296,6 +300,8 @@ class Normalization(object):
         return self.normalization_shift_rows_or_cols(0, np.vstack)
 
     def run_normalization(self):
+        if self.need_renorm == False:
+            return
         self.normalization_plate_values = {}
         self.normalization_control_maps = {}
         rows = np.array([ord(r) - ord('A') for r in self.fetch_rows()])
@@ -319,13 +325,13 @@ class Normalization(object):
             self.normalization_control_maps[plate_name] = temp
 
         for iteration in range(self.num_iterations):
-            print self.align_when, iteration
             if (self.align_when == ALIGN_EACH) or (self.align_when == ALIGN_ONCE and iteration == 0):
                 self.normalization_plate_values = self.normalization_align_plates()
             if iteration == 0:
                 self.normalization_first_alignment = self.normalization_plate_values
-            
+
             # XXX - shift control populations
             self.normalization_plate_values = self.normalization_shift_rows()
             self.normalization_plate_values = self.normalization_shift_columns()
-            print "nrom norm"
+
+        self.need_renorm = False
