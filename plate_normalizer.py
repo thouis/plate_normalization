@@ -5,6 +5,7 @@ import sys
 import random
 import os.path
 from normalization import Normalization, DETECT, TRANSFORMATIONS, ALIGN_WHEN, ALIGNMENT_METHODS, ALIGN_NEVER, CONTROL_POPULATION, CONTROL_NEGATIVE, CONTROL_POSITIVE
+from wrapfilename import wrap_filename
 import wxplotpanel
 import traceback
 import numpy as np
@@ -462,7 +463,7 @@ class Parameters(wx.Panel):
     def __init__(self, parent, normalization):
         wx.Panel.__init__(self, parent=parent)
         self.normalization = normalization
-
+        
         iterations_box = wx.StaticBox(self, wx.ID_ANY, '')
         iterations_sizer = wx.StaticBoxSizer(iterations_box, wx.HORIZONTAL)
         iterations_control = wx.SpinCtrl(self, -1, value=str(self.normalization.iterations), min=0, max=20, initial=self.normalization.iterations)
@@ -508,10 +509,21 @@ class Parameters(wx.Panel):
         plate_alignment_sizer.Add(align_when_sizer, 0, wx.EXPAND | wx.ALL, 2)
         plate_alignment_sizer.Add(align_how_sizer, 0, wx.EXPAND | wx.ALL, 2)
 
+        preview_save_box = wx.StaticBox(self, wx.ID_ANY, '')
+        preview_save_sizer = wx.StaticBoxSizer(preview_save_box, wx.HORIZONTAL)
+        preview_button = wx.Button(self, -1, 'Preview normalization')
+        save_button = wx.Button(self, -1, 'Save normalized values')
+        preview_save_sizer.Add((1,1), 1)
+        preview_save_sizer.Add(preview_button, 0)
+        preview_save_sizer.Add((1,1), 1)
+        preview_save_sizer.Add(save_button, 0)
+        preview_save_sizer.Add((1,1), 1)
+
         self.topsizer = sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(iterations_sizer, 0, wx.ALL | wx.EXPAND, 5)
         sizer.Add(transform_sizer, 0, wx.ALL | wx.EXPAND, 5)
         sizer.Add(plate_alignment_sizer, 0, wx.ALL | wx.EXPAND, 5)
+        sizer.Add(preview_save_sizer, 0, wx.ALL | wx.EXPAND, 5)
         self.SetSizer(sizer)
 
         iterations_control.Bind(wx.EVT_SPINCTRL, self.update_iterations)
@@ -525,6 +537,14 @@ class Parameters(wx.Panel):
         for b in align_how_buttons:
             b.Bind(wx.EVT_RADIOBUTTON, self.update_alignment_method)
 
+        # XXX - preview/save buttons should be inactive until the normalization is ready
+        preview_button.Bind(wx.EVT_BUTTON, self.preview)
+        save_button.Bind(wx.EVT_BUTTON, self.save)
+
+        self.default_dir = '.'
+        self.default_file = 'normalized.csv'
+        self.normalization.file_listeners.append(self.set_default_output)
+
     def update_iterations(self, evt):
         self.normalization.set_iterations(evt.EventObject.Value)
 
@@ -537,6 +557,27 @@ class Parameters(wx.Panel):
     def update_alignment_method(self, evt):
         self.normalization.set_alignment_method(evt.EventObject.Label)
 
+    def preview(self, evt):
+        self.Parent.plots.update_plots()
+
+    def save(self, evt):
+        dlg = wx.FileDialog(self, "Choose output file", wildcard="*.xls", style=wx.FD_SAVE,
+                            defaultDir=self.default_dir, defaultFile=self.default_file)
+        if dlg.ShowModal() == wx.ID_OK:
+            output_file = dlg.GetPath()
+        dlg.Destroy()
+        if os.path.exists(output_file):
+            dlg = wx.MessageDialog(self, "Will not overwrite existing file %s"%(output_file), "Warning", wx.OK|wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
+            return self.save(evt)
+        else:
+            self.normalization.set_output_file(output_file)
+            self.normalization.save()
+
+    def set_default_output(self):
+        self.default_dir = os.path.dirname(self.normalization.input_file)
+        self.default_file = wrap_filename(os.path.basename(self.normalization.input_file), 'normalized')
 
 class Plot(wxplotpanel.PlotPanel):
     ''' shared superclass with common __init__ '''
@@ -832,7 +873,8 @@ class Frame(wx.Frame):
         notebook.AddPage(Controls(notebook, self.normalization), "Controls")
         notebook.AddPage(Feature(notebook, self.normalization), "Feature")
         notebook.AddPage(Parameters(notebook, self.normalization), "Parameters")
-        notebook.AddPage(Plots(notebook, self.normalization), "Plots")
+        self.plots = Plots(notebook, self.normalization)
+        notebook.AddPage(self.plots, "Plots")
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(notebook, 1, wx.ALL|wx.EXPAND, 5)
@@ -865,12 +907,12 @@ class Frame(wx.Frame):
 
 def main():
     normalization = Normalization()
-    if len(sys.argv) > 1:
-        normalization.set_input_file(sys.argv[1])
     app = wx.App(redirect=False)
     top = Frame(app_name, normalization)
     top.Centre()
     top.Show()
+    if len(sys.argv) > 1:
+        normalization.set_input_file(sys.argv[1])
     app.MainLoop()
 
 if __name__ == "__main__":

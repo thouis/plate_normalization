@@ -1,7 +1,9 @@
 import xlrd
+import xlutils.copy
 import numpy as np
 from welltools import extract_row, extract_col
 from scipy.stats import nanmean, nanmedian
+import os.path
 
 DETECT = 'Detect'
 
@@ -87,6 +89,7 @@ class Normalization(object):
         self.gene_to_control_type = {}
         self.combine_replicates = False
         self.iterations = 10
+        self.book = None
 
         # used for fetching columns
         self.cached_book = None
@@ -107,6 +110,9 @@ class Normalization(object):
         except:
             # XXX - report error
             pass
+
+    def set_output_file(self, val):
+        self.output_file = val
 
     def update_file_listeners(self):
         for f in self.file_listeners:
@@ -159,6 +165,8 @@ class Normalization(object):
         self.gene_to_control_type[gene] = control_type
 
     def ready(self):
+        if self.num_replicates == 0:
+            return False
         for i in range(self.num_replicates):
             if self.replicate_features.get(i, None) is None:
                 return False
@@ -300,6 +308,8 @@ class Normalization(object):
         return self.normalization_shift_rows_or_cols(0, np.vstack)
 
     def run_normalization(self):
+        if not self.ready():
+            return
         if self.need_renorm == False:
             return
         self.normalization_plate_values = {}
@@ -335,3 +345,62 @@ class Normalization(object):
             self.normalization_plate_values = self.normalization_shift_columns()
 
         self.need_renorm = False
+
+    def save(self):
+        assert not os.path.exists(self.output_file), "Will not overwrite file %s"%(self.output_file)
+        self.run_normalization()
+
+        # first, copy all pages from the existing book
+        outbook, results_sheet_idx, provenance_sheet_idx = duplicate_xlbook(self.book)
+
+        # write out normalization values in order they appear in the plate/well columns
+        outboook.active_sheet = results_sheet_idx
+        for 
+
+        outbook.save(self.output_file)
+
+
+def duplicate_xlbook(book):
+    # add two sheets, one for normalization results, one for provenance tracking
+    existing_sheets = book.sheet_names()
+    count = 1
+    while 'Normalization %d'%(count) in existing_sheets:
+        count += 1
+    normalization_sheet_name = 'Normalization %d'%(count)
+
+    provenance_sheet_name = 'BFX Provenance Tracking'
+    add_provenance_sheet = (provenance_sheet_name not in existing_sheets)
+
+    # place the results sheet last, unless the BFX provenance sheet is
+    # last, in which case, just before it.
+    normalization_sheet_last = (existing_sheets[-1] != provenance_sheet_name)
+
+    from xlutils.filter import process,XLRDReader,XLWTWriter
+    class WrapWT(XLWTWriter):
+        def sheet(self, rdsheet, wtsheet_name):
+            # if we're just adding a normalization sheet, add it before the provenance sheet
+            if (not add_provenance_sheet) and (wtsheet_name == provenance_sheet_name):
+                self.wtbook.add_sheet(normalization_sheet_name)
+            # write the sheet as requested
+            XLWTWriter.sheet(self, rdsheet, wtsheet_name)
+
+        def finish(self):
+            # add two new sheets at the end if we're adding normalization and results
+            if add_provenance_sheet:
+                self.wtbook.add_sheet(normalization_sheet_name)
+                self.wtbook.add_sheet(provenance_sheet_name)
+            XLWTWriter.finish(self)
+
+    w = WrapWT()
+    process(XLRDReader(book, 'unknown.xls'), w)
+    outbook = w.output[0][1]
+
+    for normalization_sheet_idx in range(len(existing_sheets) + 2):
+        if outbook.get_sheet(normalization_sheet_idx).name == normalization_sheet_name:
+            break
+
+    for provenance_sheet_idx in range(len(existing_sheets) + 2):
+        if outbook.get_sheet(provenance_sheet_idx).name == provenance_sheet_name:
+            break
+
+    return w.output[0][1], normalization_sheet_idx, provenance_sheet_idx
