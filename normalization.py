@@ -351,11 +351,32 @@ class Normalization(object):
         self.run_normalization()
 
         # first, copy all pages from the existing book
-        outbook, results_sheet_idx, provenance_sheet_idx = duplicate_xlbook(self.book)
+        outbook, results_sheet, provenance_sheet = duplicate_xlbook(self.book)
 
         # write out normalization values in order they appear in the plate/well columns
-        outboook.active_sheet = results_sheet_idx
-        for 
+        plates = self.fetch_plates()
+        rows = self.fetch_rows()
+        cols = self.fetch_cols()
+        genes = self.fetch_genes()
+
+        def write_row(rowidx, pl, r, c, g, vals):
+            results_sheet.write(rowidx, 0, pl)
+            results_sheet.write(rowidx, 1, r)
+            results_sheet.write(rowidx, 2, c)
+            results_sheet.write(rowidx, 3, g)
+            for vidx, v in enumerate(vals):
+                results_sheet.write(rowidx, 4 + vidx, v)
+
+        def get_normalized_value(pl, r, c, repidx):
+            try:
+                return self.normalization_plate_values[pl, repidx][ord(r) - ord('A'), int(c) - 1]
+            except:
+                return ""
+
+        write_row(0, "Plate", "Row", "Column", "Gene", ["rep%d"%(r + 1) for r in range(self.num_replicates)])
+        for rowidx, (pl, r, c, g) in enumerate(zip(plates, rows, cols, genes)):
+            vals = [get_normalized_value(pl, r, c, ridx) for ridx in range(self.num_replicates)]
+            write_row(rowidx + 1, pl, r, c, g, vals)
 
         outbook.save(self.output_file)
 
@@ -380,14 +401,14 @@ def duplicate_xlbook(book):
         def sheet(self, rdsheet, wtsheet_name):
             # if we're just adding a normalization sheet, add it before the provenance sheet
             if (not add_provenance_sheet) and (wtsheet_name == provenance_sheet_name):
-                self.wtbook.add_sheet(normalization_sheet_name)
+                self.normalization_sheet = self.wtbook.add_sheet(normalization_sheet_name)
             # write the sheet as requested
             XLWTWriter.sheet(self, rdsheet, wtsheet_name)
 
         def finish(self):
             # add two new sheets at the end if we're adding normalization and results
             if add_provenance_sheet:
-                self.wtbook.add_sheet(normalization_sheet_name)
+                self.normalization_sheet = self.wtbook.add_sheet(normalization_sheet_name)
                 self.wtbook.add_sheet(provenance_sheet_name)
             XLWTWriter.finish(self)
 
@@ -395,12 +416,8 @@ def duplicate_xlbook(book):
     process(XLRDReader(book, 'unknown.xls'), w)
     outbook = w.output[0][1]
 
-    for normalization_sheet_idx in range(len(existing_sheets) + 2):
-        if outbook.get_sheet(normalization_sheet_idx).name == normalization_sheet_name:
-            break
-
     for provenance_sheet_idx in range(len(existing_sheets) + 2):
         if outbook.get_sheet(provenance_sheet_idx).name == provenance_sheet_name:
             break
 
-    return w.output[0][1], normalization_sheet_idx, provenance_sheet_idx
+    return w.output[0][1], w.normalization_sheet, outbook.get_sheet(provenance_sheet_idx)
