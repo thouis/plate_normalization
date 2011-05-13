@@ -102,11 +102,7 @@ class ColumnSelector(wx.Panel):
 
     def select_column(self, evt):
         colidx = evt.GetSelection()
-        self.callback((self.sheet_idx, colidx,
-                       self.normalization.book.sheet_names()[self.sheet_idx],
-                       self.normalization.book.sheet_by_index(self.sheet_idx).row(0)[colidx]),
-                      *self.callback_args)
-
+        self.callback((self.sheet_idx, colidx), *self.callback_args)
 
 class PlateLayout(wx.Panel):
     def __init__(self, parent, normalization):

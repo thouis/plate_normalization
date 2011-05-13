@@ -4,6 +4,9 @@ import numpy as np
 from welltools import extract_row, extract_col
 from scipy.stats import nanmean, nanmedian
 import os.path
+import datetime
+import getpass
+
 
 DETECT = 'Detect'
 
@@ -378,6 +381,25 @@ class Normalization(object):
             vals = [get_normalized_value(pl, r, c, ridx) for ridx in range(self.num_replicates)]
             write_row(rowidx + 1, pl, r, c, g, vals)
 
+        nrows = len(provenance_sheet.rows)
+        print "Provenance", nrows
+        features = [self.replicate_features[repidx] for repidx in range(self.num_replicates)]
+        feature_names = [(self.book.sheet_names()[f[0]], self.book.sheet_by_index(f[0]).row(0)[f[1]].value) for f in features]
+        provenance = ([["Normalization", datetime.date.today().isoformat(), getpass.getuser()],
+                       ["Original file", os.path.abspath(self.input_file)],
+                       ["Features"]] +
+                      [["", "Sheet:", f[0], "Column:", f[1]] for f in feature_names] +
+                      [["Number of iterations:", self.num_iterations],
+                       ["Transformation:", self.transformation],
+                       ["When to align?", self.align_when],
+                       ["How to align?", self.alignment_method],
+                       ["Control(s):"]] +
+                      [["", g, t] for g, t in self.gene_to_control_type.iteritems() if t != CONTROL_POPULATION])
+
+        for idx, l in enumerate(provenance):
+            for c, v in enumerate(l):
+                provenance_sheet.write(nrows + 1 + idx, c, v)
+
         outbook.save(self.output_file)
 
 
@@ -397,6 +419,8 @@ def duplicate_xlbook(book):
     normalization_sheet_last = (existing_sheets[-1] != provenance_sheet_name)
 
     from xlutils.filter import process,XLRDReader,XLWTWriter
+    import xlwt
+
     class WrapWT(XLWTWriter):
         def sheet(self, rdsheet, wtsheet_name):
             # if we're just adding a normalization sheet, add it before the provenance sheet
@@ -412,9 +436,15 @@ def duplicate_xlbook(book):
                 self.wtbook.add_sheet(provenance_sheet_name)
             XLWTWriter.finish(self)
 
+    # hackity hack - need to force non-ascii encoding
+    orig_Workbook_init = xlwt.Workbook.__init__
+    def replacement(self, encoding='utf-8', style_compression=0):
+        orig_Workbook_init(self, encoding, style_compression)
+    xlwt.Workbook.__init__ = replacement
     w = WrapWT()
     process(XLRDReader(book, 'unknown.xls'), w)
     outbook = w.output[0][1]
+    xlwt.Workbook.__init__ = orig_Workbook_init
 
     for provenance_sheet_idx in range(len(existing_sheets) + 2):
         if outbook.get_sheet(provenance_sheet_idx).name == provenance_sheet_name:
