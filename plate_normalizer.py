@@ -456,10 +456,11 @@ class Feature(wx.Panel):
         self.Layout()
 
 class Parameters(wx.Panel):
-    def __init__(self, parent, normalization):
+    def __init__(self, parent, normalization, preview_callback):
         wx.Panel.__init__(self, parent=parent)
         self.normalization = normalization
-        
+        self.preview_callback = preview_callback
+
         iterations_box = wx.StaticBox(self, wx.ID_ANY, '')
         iterations_sizer = wx.StaticBoxSizer(iterations_box, wx.HORIZONTAL)
         iterations_control = wx.SpinCtrl(self, -1, value=str(self.normalization.iterations), min=0, max=20, initial=self.normalization.iterations)
@@ -554,7 +555,7 @@ class Parameters(wx.Panel):
         self.normalization.set_alignment_method(evt.EventObject.Label)
 
     def preview(self, evt):
-        self.Parent.plots.update_plots()
+        self.preview_callback()
 
     def save(self, evt):
         dlg = wx.FileDialog(self, "Choose output file", wildcard="*.xls", style=wx.FD_SAVE,
@@ -865,11 +866,11 @@ class Frame(wx.Frame):
 
         notebook = self.notebook = wx.Notebook(panel)
 
+        self.plots = Plots(notebook, self.normalization)
         notebook.AddPage(PlateLayout(notebook, self.normalization), "File && Layout")
         notebook.AddPage(Controls(notebook, self.normalization), "Controls")
         notebook.AddPage(Feature(notebook, self.normalization), "Feature")
-        notebook.AddPage(Parameters(notebook, self.normalization), "Parameters")
-        self.plots = Plots(notebook, self.normalization)
+        notebook.AddPage(Parameters(notebook, self.normalization, self.plots.update_plots), "Parameters")
         notebook.AddPage(self.plots, "Plots")
 
         sizer = wx.BoxSizer(wx.VERTICAL)

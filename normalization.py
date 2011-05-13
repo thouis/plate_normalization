@@ -382,10 +382,10 @@ class Normalization(object):
             write_row(rowidx + 1, pl, r, c, g, vals)
 
         nrows = len(provenance_sheet.rows)
-        print "Provenance", nrows
+
         features = [self.replicate_features[repidx] for repidx in range(self.num_replicates)]
         feature_names = [(self.book.sheet_names()[f[0]], self.book.sheet_by_index(f[0]).row(0)[f[1]].value) for f in features]
-        provenance = ([["Normalization", datetime.date.today().isoformat(), getpass.getuser()],
+        provenance = ([["Normalization", results_sheet.name, datetime.date.today().isoformat(), getpass.getuser()],
                        ["Original file", os.path.abspath(self.input_file)],
                        ["Features"]] +
                       [["", "Sheet:", f[0], "Column:", f[1]] for f in feature_names] +
