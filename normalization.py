@@ -49,10 +49,15 @@ def safe_float(s):
 def logit(v):
     # make 0/1 representable, linear interpolate between 0.0001 and 0.9999
     v = 0.0001 + v * 0.9998
-    lv = np.log(v) / np.log(1.0 - v)
+    lv = np.log(v) - np.log(1.0 - v)
     # deal with infinities
     lv[v <= 0.0] = - np.inf
     lv[v >= 1.0] = np.inf
+    return lv
+
+def inv_logit(lv):
+    v = np.exp(lv) / (1 + np.exp(lv))
+    v = (v - 0.0001) / 0.9998
     return lv
 
 def fix_nans(shift_vals):
