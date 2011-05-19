@@ -381,6 +381,7 @@ class Normalization(object):
             except:
                 return ""
 
+        # XXX - should write Well = Row+Column
         write_row(0, "Plate", "Row", "Column", "Gene", ["rep%d"%(r + 1) for r in range(self.num_replicates)])
         for rowidx, (pl, r, c, g) in enumerate(zip(plates, rows, cols, genes)):
             vals = [get_normalized_value(pl, r, c, ridx) for ridx in range(self.num_replicates)]

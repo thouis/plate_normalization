@@ -137,8 +137,8 @@ class PlateLayout(wx.Panel):
 
         well_column_box = wx.StaticBox(self, wx.ID_ANY, 'Well column(s) in spreadsheet')
         self.well_column_sizer = wx.StaticBoxSizer(well_column_box, wx.VERTICAL)
-        wells_combined = self.wells_combined = wx.RadioButton(self, -1, 'Wells in single column', style=wx.RB_GROUP)
-        wells_separate = wx.RadioButton(self, -1, 'Rows & columns in separate columns')
+        wells_combined = self.wells_combined = wx.RadioButton(self, -1, 'Wells in single spreadsheet column', style=wx.RB_GROUP)
+        wells_separate = wx.RadioButton(self, -1, 'Rows && columns in separate spreadsheet columns')
         self.well_selector = ColumnSelector(self, self.set_well_column, 'well', self.normalization)
         self.wellrow_selector = ColumnSelector(self, self.set_wellrow_column, 'row', self.normalization)
         self.wellcol_selector = ColumnSelector(self, self.set_wellcol_column, 'col', self.normalization)
@@ -148,7 +148,7 @@ class PlateLayout(wx.Panel):
         self.well_column_sizer.Add(self.wellrow_selector, 0, wx.EXPAND | wx.TOP, 5)
         self.well_column_sizer.Add(self.wellcol_selector, 0, wx.EXPAND | wx.TOP, 5)
 
-        gene_column_box = wx.StaticBox(self, wx.ID_ANY, 'Gene column in spreadsheet')
+        gene_column_box = wx.StaticBox(self, wx.ID_ANY, 'Gene/Chemical column in spreadsheet')
         gene_column_sizer = wx.StaticBoxSizer(gene_column_box, wx.VERTICAL)
         self.gene_column_selector = ColumnSelector(self, self.set_gene_column, 'gene', self.normalization)
         gene_column_sizer.Add(self.gene_column_selector, 0, wx.EXPAND)
@@ -312,7 +312,7 @@ class PlateLayout(wx.Panel):
         except Exception, e:
             import traceback
             traceback.print_exc()
-            self.status_text.Label = "Choose settings..."
+            self.status_text.Label = "Choose settings above..."
             self.valid = False
 
 class Controls(wx.Panel):
@@ -359,6 +359,7 @@ class Controls(wx.Panel):
 
         def make_row(panel, g, c, t, n, p):
             self.row_controls.append([g, c, t, n, p])
+            g.Wrap(150)
             sizer = wx.BoxSizer(wx.HORIZONTAL)
             sizer.Add(g, 1, wx.ALIGN_CENTER)
             sizer.Add(c, 1, wx.ALIGN_CENTER)
@@ -376,7 +377,7 @@ class Controls(wx.Panel):
         panel.BackgroundColour = "light blue"
         # XXX - this should be outside the scrolled area.
         self.row_sizer.Add(make_row(panel,
-                                    wx.StaticText(panel, -1, "Gene Name"),
+                                    wx.StaticText(panel, -1, "Name"),
                                     wx.StaticText(panel, -1, "Count"),
                                     wx.StaticText(panel, -1, "Tested Population"),
                                     wx.StaticText(panel, -1, "Negative Control"),
