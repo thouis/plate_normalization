@@ -2,7 +2,7 @@
 import matplotlib
 matplotlib.interactive(True)
 matplotlib.use('WXAgg')
-from mpl_toolkits.axes_grid import ImageGrid
+from mpl_toolkits.axes_grid1 import ImageGrid
 import wx
 import matplotlib.colors
 from matplotlib.backends.backend_pdf import PdfPages
@@ -52,6 +52,7 @@ class PlotPanel (wx.Panel):
 
     def image_grid(self, num_rows, num_cols):
         return ImageGrid(self.figure, 111,
+                         share_all = True,
                          nrows_ncols = (num_rows, num_cols),
                          cbar_size = "3%",
                          cbar_pad = 0.02,

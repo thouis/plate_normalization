@@ -640,18 +640,28 @@ class PlatePlot(Plot):
                 except:
                     pass
         norm = self.get_norm(lo, hi)
+        xticklocs = range(0, 24, 2) if (self.normalization.plate_shape() == '384') else range(0, 12)
+        yticklocs = range(0, 16, 2) if (self.normalization.plate_shape() == '384') else range(0, 8)
+        xticklabels = ["%02d"%(i+ 1) for i in xticklocs]
+        yticklabels = ['ABCDEFGHIJKLMNOP'[i] for i in yticklocs]
         for plate_index in range(self.get_num_plates()):
             for rep in range(self.get_num_replicates()):
                 try:
                     im = self.get_plate(plate_index, rep)
                     if np.any(~ np.isfinite(im)):
                         bad_data = True
-                    mappable = grid[plotidx].imshow(im, interpolation='nearest', norm=norm)
+                    mappable = grid[plotidx].imshow(im, interpolation='nearest', norm=norm, origin='upper')
+                    grid[plotidx].set_xticks(xticklocs)
+                    grid[plotidx].set_yticks(yticklocs)
+                    grid[plotidx].set_xticklabels(xticklabels, size='xx-small')
+                    grid[plotidx].set_yticklabels(yticklabels, size='x-small')
                     plotidx += 1
                 except:
                     print "Exception", plate_index, rep
                     traceback.print_exc()
                     pass
+        grid[0].set_xlim(-0.5, 23.5 if (self.normalization.plate_shape() == '384') else 11.5)
+        grid[0].set_ylim(15.5 if (self.normalization.plate_shape() == '384') else 7.5, -0.5)
         grid[0].cax.colorbar(mappable)
         grid[0].cax.toggle_label(True)
         self.post_draw(bad_data)
