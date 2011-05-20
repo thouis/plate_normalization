@@ -7,7 +7,6 @@ import os.path
 import datetime
 import getpass
 
-
 DETECT = 'Detect'
 
 TRANSFORM_NONE = 'None'
@@ -186,21 +185,29 @@ class Normalization(object):
             self.feature_selection_finished()
 
     def set_iterations(self, val):
+        if self.iterations == val:
+            return
         self.iterations = val
         self.parameter_changed()
 
     def set_transformation(self, trans):
         assert trans in TRANSFORMATIONS
+        if self.transformation == trans:
+            return
         self.transformation = trans
         self.parameter_changed()
 
     def set_alignment_when(self, w):
         assert w in ALIGN_WHEN
+        if self.align_when == w:
+            return
         self.align_when = w
         self.parameter_changed()
 
     def set_alignment_method(self, m):
         assert m in ALIGNMENT_METHODS
+        if self.alignment_method == m:
+            return
         self.alignment_method = m
         self.parameter_changed()
 
