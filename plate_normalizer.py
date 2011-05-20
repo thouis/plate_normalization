@@ -9,6 +9,7 @@ from wrapfilename import wrap_filename
 import wxplotpanel
 import traceback
 import numpy as np
+import collections
 
 app_name = "Plate Normalizer"
 aboutText = """<p>Plate normalizer v0.1.</p>"""
@@ -511,10 +512,13 @@ class Parameters(wx.Panel):
         preview_save_sizer = wx.StaticBoxSizer(preview_save_box, wx.HORIZONTAL)
         preview_button = wx.Button(self, -1, 'Preview normalization')
         save_button = wx.Button(self, -1, 'Save normalized values')
+        save_figures_button = wx.Button(self, -1, 'Save figures')
         preview_save_sizer.Add((1,1), 1)
         preview_save_sizer.Add(preview_button, 0)
         preview_save_sizer.Add((1,1), 1)
         preview_save_sizer.Add(save_button, 0)
+        preview_save_sizer.Add((1,1), 1)
+        preview_save_sizer.Add(save_figures_button, 0)
         preview_save_sizer.Add((1,1), 1)
 
         self.topsizer = sizer = wx.BoxSizer(wx.VERTICAL)
@@ -538,6 +542,7 @@ class Parameters(wx.Panel):
         # XXX - preview/save buttons should be inactive until the normalization is ready
         preview_button.Bind(wx.EVT_BUTTON, self.preview)
         save_button.Bind(wx.EVT_BUTTON, self.save)
+        save_figures_button.Bind(wx.EVT_BUTTON, self.save_figures)
 
         self.default_dir = '.'
         self.default_file = 'normalized.csv'
@@ -561,9 +566,12 @@ class Parameters(wx.Panel):
     def save(self, evt):
         dlg = wx.FileDialog(self, "Choose output file", wildcard="*.xls", style=wx.FD_SAVE,
                             defaultDir=self.default_dir, defaultFile=self.default_file)
+        output_file = None
         if dlg.ShowModal() == wx.ID_OK:
             output_file = dlg.GetPath()
         dlg.Destroy()
+        if not output_file:
+            return
         if os.path.exists(output_file):
             dlg = wx.MessageDialog(self, "Will not overwrite existing file %s"%(output_file), "Warning", wx.OK|wx.ICON_WARNING)
             dlg.ShowModal()
@@ -572,6 +580,24 @@ class Parameters(wx.Panel):
         else:
             self.normalization.set_output_file(output_file)
             self.normalization.save()
+
+    def save_figures(self, evt):
+        dlg = wx.FileDialog(self, "Choose figures file", wildcard="*.pdf", style=wx.FD_SAVE,
+                            defaultDir=self.default_dir, defaultFile=self.default_file.replace('xls', 'pdf'))
+        plots_output_file = None
+        if dlg.ShowModal() == wx.ID_OK:
+            plots_output_file = dlg.GetPath()
+        dlg.Destroy()
+        if not plots_output_file:
+            return
+        if os.path.exists(plots_output_file):
+            dlg = wx.MessageDialog(self, "Will not overwrite existing file %s"%(plots_output_file), "Warning", wx.OK|wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
+            return self.save_figures(evt)
+        else:
+            self.preview_callback()
+            self.TopLevelParent.plots.save_plots(plots_output_file)
 
     def set_default_output(self):
         self.default_dir = os.path.dirname(self.normalization.input_file)
@@ -785,7 +811,7 @@ class Plots(wx.Panel):
 
         self.scroll_window = wx.lib.scrolledpanel.ScrolledPanel(self, -1)
         self.subpanel = subpanel = wx.Panel(self.scroll_window, -1)
-        self.panels = {}
+        self.panels = collections.OrderedDict()
         self.panels['original data'] = OriginalHistograms(subpanel, normalization)
         self.panels['original platemaps'] = OriginalPlates(subpanel, normalization)
         self.panels['transformed data'] = TransformedHistograms(subpanel, normalization)
@@ -843,6 +869,12 @@ class Plots(wx.Panel):
         num_visible = len([p for p in self.panels.values() if p.IsShown()])
         self.subpanel.Size = (width * num_visible, height)
         self.scroll_window.VirtualSize = self.subpanel.Size
+
+    def save_plots(self, filename):
+        pdfpages = wxplotpanel.start_pdf(filename)
+        for p in self.panels.values():
+            p.save_to_pdf(pdfpages)
+        wxplotpanel.end_pdf(pdfpages)
 
 class Frame(wx.Frame):
     def __init__(self, title, normalization):

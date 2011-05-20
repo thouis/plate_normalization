@@ -5,14 +5,13 @@ matplotlib.use('WXAgg')
 from mpl_toolkits.axes_grid import ImageGrid
 import wx
 import matplotlib.colors
-
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
+from matplotlib.figure import Figure, SubplotParams
 
 class PlotPanel (wx.Panel):
     """The PlotPanel has a Figure and a Canvas"""
     def __init__(self, parent, color=(255, 255, 255), dpi=None, **kwargs):
-        from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg
-        from matplotlib.figure import Figure, SubplotParams
-
         # initialize Panel
         if 'id' not in kwargs.keys():
             kwargs['id'] = wx.ID_ANY
@@ -20,10 +19,9 @@ class PlotPanel (wx.Panel):
             kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE
         wx.Panel.__init__(self, parent, **kwargs)
 
-        subplotparams = SubplotParams(0.02, 0.02, 0.98, 0.98, 0.1, 0.1)
-
+        # subplotparams = SubplotParams(0.02, 0.02, 0.98, 0.98, 0.1, 0.1)
         # initialize matplotlib stuff
-        self.figure = Figure((2.1, 2.97), dpi, subplotparams)
+        self.figure = Figure((2.1, 2.97), dpi)
         self.canvas = FigureCanvasWxAgg(self, -1, self.figure)
         self.SetColor(color)
 
@@ -61,3 +59,17 @@ class PlotPanel (wx.Panel):
 
     def get_norm(self, vmin, vmax):
         return matplotlib.colors.normalize(vmax=vmax, vmin=vmin)
+
+    def save_to_pdf(self, pdfpages):
+        old_fig = self.figure
+        self.figure = Figure((8.5, 11), dpi=300)
+        canvas = matplotlib.backends.backend_pdf.FigureCanvasPdf(self.figure)
+        self.draw()
+        pdfpages.savefig(self.figure)
+        self.figure = old_fig
+
+def start_pdf(filename):
+    return PdfPages(filename)
+
+def end_pdf(pdfpages):
+    pdfpages.close()
