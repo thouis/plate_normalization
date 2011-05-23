@@ -69,6 +69,17 @@ class PlotPanel (wx.Panel):
         pdfpages.savefig(self.figure)
         self.figure = old_fig
 
+    def align_subplots(self):
+        xmin = matplotlib.numpy.inf
+        xmax = - matplotlib.numpy.inf
+        for subplot in self.figure.get_axes():
+            xmin = min(xmin, subplot.get_xlim()[0])
+            xmax = max(xmax, subplot.get_xlim()[1])
+        for subplot in self.figure.get_axes():
+            subplot.set_xlim(xmin, xmax)
+
+
+
 def start_pdf(filename):
     return PdfPages(filename)
 

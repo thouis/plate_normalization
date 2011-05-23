@@ -338,8 +338,6 @@ class Controls(wx.Panel):
         self.SetSizer(sizer)
         self.Layout()
 
-        # XXX BIND change normalization - set types, flag for recalc
-
         self.normalization.parsing_listeners.append(self.update)
 
         self.Bind(wx.EVT_RADIOBUTTON, self.set_gene_control_type)
@@ -682,12 +680,12 @@ class PlatePlot(Plot):
         return self.normalization.num_plates()
 
 class OriginalHistograms(Plot):
-    # XXX - align axes
     def do_draw(self):
         self.figure.suptitle('original')
         for rep in range(self.normalization.num_replicates):
             subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep + 1)
             subplot.hist(self.normalization.get_replicate_data(rep), 20)
+        self.align_subplots()
 
 class OriginalPlates(PlatePlot):
     def get_plate(self, plate_index, rep):
@@ -698,7 +696,6 @@ class OriginalPlates(PlatePlot):
 
 
 class TransformedHistograms(Plot):
-    # XXX - align axes
     def do_draw(self):
         bad_data = False
         for rep in range(self.normalization.num_replicates):
@@ -709,6 +706,7 @@ class TransformedHistograms(Plot):
                 bad_data = True
             if len(good_data) > 0:
                 subplot.hist(good_data, 20)
+        self.align_subplots()
         self.figure.suptitle('transformed%s'%(' (invalid values discarded)' if bad_data else ''))
 
 class TransformedPlates(PlatePlot):
@@ -800,7 +798,6 @@ class CleanedPlates(PlatePlot):
 
 
 class CleanedTransformedHistograms(Plot):
-    # XXX - align axes
     def do_draw(self):
         self.figure.suptitle('cleaned transformed')
         for repindex in range(self.normalization.num_replicates):
@@ -809,7 +806,7 @@ class CleanedTransformedHistograms(Plot):
                               for pl, rep in self.normalization.normalization_plate_values
                               if rep == repindex]).flatten()
             subplot.hist(vals, 20)
-
+        self.align_subplots()
 
 class Plots(wx.Panel):
     def __init__(self, parent, normalization):
@@ -857,10 +854,10 @@ class Plots(wx.Panel):
 
         self.Bind(wx.EVT_SIZE, self.on_size)
 
-        normalization.feature_selection_listeners.append(self.update_plots)
         normalization.parameter_change_listeners.append(self.update_parameters)
 
     def update_plots(self):
+        # XXX - should have some way to mark plots dirty
         for p in self.panels.values():
             p.draw()
             p.canvas.draw()
