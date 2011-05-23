@@ -169,6 +169,7 @@ class Normalization(object):
         return [self.gene_to_control_type.get(g, CONTROL_POPULATION) for g in self.fetch_genes()]
 
     def set_control_type(self, gene, control_type):
+        self.need_renorm = True
         self.gene_to_control_type[gene] = control_type
 
     def ready(self):
@@ -180,6 +181,7 @@ class Normalization(object):
         return True
 
     def set_replicate_feature(self, index, val):
+        self.need_renorm = True
         self.replicate_features[index] = val
         if self.ready():
             self.feature_selection_finished()
@@ -374,13 +376,9 @@ class Normalization(object):
         cols = self.fetch_cols()
         genes = self.fetch_genes()
 
-        def write_row(rowidx, pl, r, c, g, vals):
-            results_sheet.write(rowidx, 0, pl)
-            results_sheet.write(rowidx, 1, r)
-            results_sheet.write(rowidx, 2, c)
-            results_sheet.write(rowidx, 3, g)
-            for vidx, v in enumerate(vals):
-                results_sheet.write(rowidx, 4 + vidx, v)
+        def write_row(rowidx, basecol, *args):
+            for idx, v in enumerate(args):
+                results_sheet.write(rowidx, basecol + idx, v)
 
         def get_normalized_value(pl, r, c, repidx):
             try:
@@ -389,13 +387,72 @@ class Normalization(object):
                 return ""
 
         # XXX - should write Well = Row+Column
-        write_row(0, "Plate", "Row", "Column", "Gene", ["rep%d"%(r + 1) for r in range(self.num_replicates)])
+        write_row(0, 0, "Plate", "Row", "Column", "Gene", *["rep%d"%(r + 1) for r in range(self.num_replicates)])
         for rowidx, (pl, r, c, g) in enumerate(zip(plates, rows, cols, genes)):
             vals = [get_normalized_value(pl, r, c, ridx) for ridx in range(self.num_replicates)]
-            write_row(rowidx + 1, pl, r, c, g, vals)
+            write_row(rowidx + 1, 0, pl, r, c, g, *vals)
 
+        # Write per-replicate median and MAD of all wells, population, negative controls, positive controls
+        dest_column = len(vals) + 4 + 2 
+        dest_row = [3]
+        def write_summary(*vals):
+            write_row(dest_row[0], dest_column, *vals)
+            dest_row[0] += 1
+
+        # fetch values
+        allplates = list(set(plates))
+        allvals = {}
+        for ridx in range(self.num_replicates):
+            allvals[ridx] = np.dstack([self.normalization_plate_values[pl, ridx] for pl in allplates])
+        all_control_maps = np.dstack([self.normalization_control_maps[pl] for pl in allplates])
+
+        # all wells
+        write_summary("", "Median / MAD")
+        write_summary("", *["R%d"%(ridx + 1) for ridx in range(self.num_replicates)])
+        meds = []
+        sigma_MADs = []
+        for ridx in range(self.num_replicates):
+            vals = allvals[ridx].flatten()
+            meds.append(np.median(vals))
+            sigma_MADs.append(1.4826 * np.median(np.abs(vals - meds[-1])))
+        write_summary("Median All Wells", *meds)
+        write_summary("sigma_MAD All Wells", *sigma_MADs)
+
+        # population
+        write_summary("")
+        meds = []
+        sigma_MADs = []
+        for ridx in range(self.num_replicates):
+            vals = allvals[ridx][all_control_maps == CONTROL_POPULATION]
+            meds.append(np.median(vals))
+            sigma_MADs.append(1.4826 * np.median(np.abs(vals - meds[-1])))
+        write_summary("Median Population", *meds)
+        write_summary("sigma_MAD Population", *sigma_MADs)
+
+        # negative controls
+        write_summary("")
+        meds = []
+        sigma_MADs = []
+        for ridx in range(self.num_replicates):
+            vals = allvals[ridx][all_control_maps == CONTROL_NEGATIVE]
+            meds.append(np.median(vals))
+            sigma_MADs.append(1.4826 * np.median(np.abs(vals - meds[-1])))
+        write_summary("Median Neg. Controls", *meds)
+        write_summary("sigma_MAD Neg. Controls", *sigma_MADs)
+
+        # positive controls
+        write_summary("")
+        meds = []
+        sigma_MADs = []
+        for ridx in range(self.num_replicates):
+            vals = allvals[ridx][all_control_maps == CONTROL_POSITIVE]
+            meds.append(np.median(vals))
+            sigma_MADs.append(1.4826 * np.median(np.abs(vals - meds[-1])))
+        write_summary("Median Pos. Controls", *meds)
+        write_summary("sigma_MAD Pos. Controls", *sigma_MADs)
+
+        # Provenance sheet
         nrows = len(provenance_sheet.rows)
-
         features = [self.replicate_features[repidx] for repidx in range(self.num_replicates)]
         feature_names = [(self.book.sheet_names()[f[0]], self.book.sheet_by_index(f[0]).row(0)[f[1]].value) for f in features]
         provenance = ([["Normalization", results_sheet.name, datetime.date.today().isoformat(), getpass.getuser()],
