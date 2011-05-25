@@ -262,8 +262,6 @@ class Normalization(object):
     # (platename, repindex).
 
     def normalization_align_plates(self):
-        # XXX - should not shift plates that are more than half filled by controls
-        # compute an offset per-plate and per-replicate
         offsets = {}
         for (plate, repindex), values in self.normalization_plate_values.iteritems():
             control_map = self.normalization_control_maps[plate]
@@ -275,36 +273,50 @@ class Normalization(object):
                 align_values = values
             else:
                 assert False, "Unknown normalization method: %s"%(self.alignment_method)
-            assert len(align_values) > 0, "No valid wells on plate %s and replicate %d for alignment using %s"%(plate, repindex + 1, self.alignment_method)
-            offsets[plate, repindex] = np.median(align_values)
+
+            # XXX - should not shift plates that are more than half filled by controls
+            # compute an offset per-plate and per-replicate
+            if len(align_values) > 0:
+                offsets[plate, repindex] = np.median(align_values)
+            else:
+                offsets[plate, repindex] = np.nan
         # shift offsets to zero-median to keep things identifiable
         if self.combine_replicates:
-            global_shift = np.median(offsets.values())
-
-            print "	", offsets
-            print "	global: ", global_shift
-            return dict(((plate, repindex), values - (offsets[plate, repindex] - global_shift))
+            # keep overall shift at 0
+            global_shift = nanmedian(offsets.values())
+            for plate, repindex in offsets:
+                if np.isnan(offsets[plate, repindex]):
+                    offsets[plate, repindex] = 0.0
+                else:
+                    offsets[plate, repindex] -= global_shift
+                self.normalization_total_plate_shifts[plate, repindex] += offsets[plate, repindex]
+            return dict(((plate, repindex), values - offsets[plate, repindex])
                         for ((plate, repindex), values) in self.normalization_plate_values.iteritems())
         else:
             replicate_indices = np.array([repindex for _, repindex in offsets])
             offset_vals = np.array(offsets.values())
-            per_replicate_shifts = dict((repindex, np.median(offset_vals[replicate_indices == repindex])) for repindex in range(self.num_replicates))
-            print "	", offsets
-            print "	per-rep: ", per_replicate_shifts
-            return dict(((plate, repindex), values - (offsets[plate, repindex] - per_replicate_shifts[repindex]))
+            per_replicate_shifts = dict((repindex, nanmedian(offset_vals[replicate_indices == repindex])) for repindex in range(self.num_replicates))
+            for plate, repindex in offsets:
+                if np.isnan(offsets[plate, repindex]):
+                    offsets[plate, repindex] = 0.0
+                else:
+                    offsets[plate, repindex] -= per_replicate_shifts[repindex]
+                self.normalization_total_plate_shifts[plate, repindex] += offsets[plate, repindex]
+            return dict(((plate, repindex), values - offsets[plate, repindex])
                         for ((plate, repindex), values) in self.normalization_plate_values.iteritems())
 
-    def normalization_shift_rows_or_cols(self, axis, stacker):
+    def normalization_shift_rows_or_cols(self, axis, stacker, history):
         endshape = [-1, -1]
         endshape[axis] = 1
         if self.combine_replicates:
             all_plates = stacker(self.normalization_plate_values.keys())
             controls = (stacker([self.normalization_control_maps[pl] for pl, _ in self.normalization_plate_values.keys()]) != CONTROL_POPULATION)
             all_plates[controls] = np.nan
-            offsets = fix_nans(nanmedian(all_plates, axis))
+            offsets = fix_nans(nanmedian(all_plates, axis)).reshape(endshape)
             # shift offsets to zero-median to keep things identifiable
             offsets -= np.median(offsets)
-            return dict(((plate, repindex), values - offsets.reshape(endshape))
+            history += offsets
+            return dict(((plate, repindex), values - offsets)
                         for ((plate, repindex), values) in self.normalization_plate_values.iteritems())
         else:
             offsets = {}
@@ -312,17 +324,18 @@ class Normalization(object):
                 rep_plates = stacker([v for (_, rep), v in self.normalization_plate_values.iteritems() if repindex == rep])
                 controls = (stacker([self.normalization_control_maps[pl] for pl, rep in self.normalization_plate_values.keys() if repindex == rep]) != CONTROL_POPULATION)
                 rep_plates[controls] = np.nan
-                offsets[repindex] = fix_nans(nanmedian(rep_plates, axis))
+                offsets[repindex] = fix_nans(nanmedian(rep_plates, axis)).reshape(endshape)
                 # shift offsets to zero-median to keep things identifiable
                 offsets[repindex] -= np.median(offsets[repindex])
-            return dict(((plate, repindex), values - offsets[repindex].reshape(endshape))
+                history[repindex] += offsets[repindex]
+            return dict(((plate, repindex), values - offsets[repindex])
                         for ((plate, repindex), values) in self.normalization_plate_values.iteritems())
 
     def normalization_shift_rows(self):
-        return self.normalization_shift_rows_or_cols(1, np.hstack)
+        return self.normalization_shift_rows_or_cols(1, np.hstack, self.normalization_total_row_shifts)
 
     def normalization_shift_columns(self):
-        return self.normalization_shift_rows_or_cols(0, np.vstack)
+        return self.normalization_shift_rows_or_cols(0, np.vstack, self.normalization_total_col_shifts)
 
     def run_normalization(self):
         if not self.ready():
@@ -351,6 +364,15 @@ class Normalization(object):
             temp[rows[mask], cols[mask]] = control_types[mask]
             self.normalization_control_maps[plate_name] = temp
 
+        # total shifts
+        self.normalization_total_plate_shifts = dict(((pl, repindex), 0.0) for (pl, repindex) in self.normalization_plate_values)
+        if self.combine_replicates:
+            self.normalization_total_row_shifts = np.zeros((self.plate_dims[0], 1))
+            self.normalization_total_col_shifts = np.zeros((1, self.plate_dims[1]))
+        else:
+            self.normalization_total_row_shifts = dict((idx, np.zeros((self.plate_dims()[0], 1))) for idx in range(self.num_replicates))
+            self.normalization_total_col_shifts = dict((idx, np.zeros((1, self.plate_dims()[1]))) for idx in range(self.num_replicates))
+
         for iteration in range(self.num_iterations):
             if (self.align_when == ALIGN_EACH) or (self.align_when == ALIGN_ONCE and iteration == 0):
                 self.normalization_plate_values = self.normalization_align_plates()
@@ -360,6 +382,8 @@ class Normalization(object):
             # XXX - shift control populations
             self.normalization_plate_values = self.normalization_shift_rows()
             self.normalization_plate_values = self.normalization_shift_columns()
+
+        print self.normalization_total_plate_shifts, self.normalization_total_row_shifts, self.normalization_total_col_shifts
 
         self.need_renorm = False
 
