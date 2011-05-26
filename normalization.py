@@ -95,7 +95,6 @@ class Normalization(object):
         self.num_iterations = 10
         self.gene_to_control_type = {}
         self.combine_replicates = False
-        self.iterations = 10
         self.book = None
 
         # used for fetching columns
@@ -187,9 +186,9 @@ class Normalization(object):
             self.feature_selection_finished()
 
     def set_iterations(self, val):
-        if self.iterations == val:
+        if self.num_iterations == val:
             return
-        self.iterations = val
+        self.num_iterations = val
         self.parameter_changed()
 
     def set_transformation(self, trans):
@@ -312,6 +311,7 @@ class Normalization(object):
             all_plates = stacker(self.normalization_plate_values.keys())
             controls = (stacker([self.normalization_control_maps[pl] for pl, _ in self.normalization_plate_values.keys()]) != CONTROL_POPULATION)
             all_plates[controls] = np.nan
+            # XXX - if a column is more than half controls, we should probably use adjacent columns to estimate its median
             offsets = fix_nans(nanmedian(all_plates, axis)).reshape(endshape)
             # shift offsets to zero-median to keep things identifiable
             offsets -= np.median(offsets)
@@ -324,6 +324,7 @@ class Normalization(object):
                 rep_plates = stacker([v for (_, rep), v in self.normalization_plate_values.iteritems() if repindex == rep])
                 controls = (stacker([self.normalization_control_maps[pl] for pl, rep in self.normalization_plate_values.keys() if repindex == rep]) != CONTROL_POPULATION)
                 rep_plates[controls] = np.nan
+                # XXX - if a column is more than half controls, we should probably use adjacent columns to estimate its median
                 offsets[repindex] = fix_nans(nanmedian(rep_plates, axis)).reshape(endshape)
                 # shift offsets to zero-median to keep things identifiable
                 offsets[repindex] -= np.median(offsets[repindex])
@@ -383,7 +384,7 @@ class Normalization(object):
             self.normalization_plate_values = self.normalization_shift_rows()
             self.normalization_plate_values = self.normalization_shift_columns()
 
-        print self.normalization_total_plate_shifts, self.normalization_total_row_shifts, self.normalization_total_col_shifts
+        # XXX - record shifts applied
 
         self.need_renorm = False
 

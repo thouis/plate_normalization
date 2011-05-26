@@ -133,7 +133,7 @@ class PlateLayout(wx.Panel):
 
         plate_column_box = wx.StaticBox(self, wx.ID_ANY, 'Plate column in spreadsheet')
         plate_column_sizer = wx.StaticBoxSizer(plate_column_box, wx.VERTICAL)
-        plate_column_selector = ColumnSelector(self, self.set_plate_column, 'plate num', self.normalization)
+        plate_column_selector = ColumnSelector(self, self.set_plate_column, 'plate', self.normalization)
         plate_column_sizer.Add(plate_column_selector, 0, wx.EXPAND)
 
         well_column_box = wx.StaticBox(self, wx.ID_ANY, 'Well column(s) in spreadsheet')
@@ -463,7 +463,7 @@ class Parameters(wx.Panel):
 
         iterations_box = wx.StaticBox(self, wx.ID_ANY, '')
         iterations_sizer = wx.StaticBoxSizer(iterations_box, wx.HORIZONTAL)
-        iterations_control = wx.SpinCtrl(self, -1, value=str(self.normalization.iterations), min=0, max=20, initial=self.normalization.iterations)
+        iterations_control = wx.SpinCtrl(self, -1, value=str(self.normalization.num_iterations), min=0, max=20, initial=self.normalization.num_iterations)
         iterations_sizer.Add((1,1), 1)
         iterations_sizer.Add(wx.StaticText(self, -1, "Number of iterations:"), 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 2)
         iterations_sizer.Add(iterations_control, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 2)
@@ -527,6 +527,7 @@ class Parameters(wx.Panel):
         self.SetSizer(sizer)
 
         iterations_control.Bind(wx.EVT_SPINCTRL, self.update_iterations)
+        iterations_control.Bind(wx.EVT_TEXT, self.update_iterations)
 
         for b in transform_buttons:
             b.Bind(wx.EVT_RADIOBUTTON, self.update_transform)
@@ -547,7 +548,11 @@ class Parameters(wx.Panel):
         self.normalization.file_listeners.append(self.set_default_output)
 
     def update_iterations(self, evt):
-        self.normalization.set_iterations(evt.EventObject.Value)
+        try:
+            int(evt.EventObject.Value)
+        except:
+            return
+        self.normalization.set_iterations(int(evt.EventObject.Value))
 
     def update_transform(self, evt):
         self.normalization.set_transformation(evt.EventObject.Label)
