@@ -9,7 +9,10 @@ from wrapfilename import wrap_filename
 import wxplotpanel
 import traceback
 import numpy as np
-import collections
+try:
+    from collections import OrderedDict
+except:
+    from ordereddict import OrderedDict # available on pypi
 
 app_name = "Plate Normalizer"
 aboutText = """<p>Plate normalizer v0.1.</p>"""
@@ -825,7 +828,7 @@ class Plots(wx.Panel):
 
         self.scroll_window = wx.lib.scrolledpanel.ScrolledPanel(self, -1)
         self.subpanel = subpanel = wx.Panel(self.scroll_window, -1)
-        self.panels = collections.OrderedDict()
+        self.panels = OrderedDict()
         self.panels['original data'] = OriginalHistograms(subpanel, normalization)
         self.panels['original platemaps'] = OriginalPlates(subpanel, normalization)
         self.panels['transformed data'] = TransformedHistograms(subpanel, normalization)
