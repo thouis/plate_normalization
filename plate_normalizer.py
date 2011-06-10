@@ -821,6 +821,8 @@ class Plots(wx.Panel):
 
         # XXX - add control layout map
 
+        # XXX - add old vs. new scatterplot
+
         self.scroll_window = wx.lib.scrolledpanel.ScrolledPanel(self, -1)
         self.subpanel = subpanel = wx.Panel(self.scroll_window, -1)
         self.panels = collections.OrderedDict()
