@@ -888,6 +888,7 @@ class Plots(wx.Panel):
         self.scroll_window.VirtualSize = self.subpanel.Size
 
     def save_plots(self, filename):
+        # XXX - progressbar
         pdfpages = wxplotpanel.start_pdf(filename)
         for p in self.panels.values():
             p.save_to_pdf(pdfpages)
