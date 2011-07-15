@@ -51,7 +51,8 @@ class DirTree(CT.CustomTreeCtrl):
                     self.AppendItem(child, '...')
             if len(subfiles) > 0:
                 for sf in subfiles:
-                    child = self.AppendItem(item, sf, ct_type=0)
+                    if self.display_file_test(sf):
+                        child = self.AppendItem(item, sf, ct_type=0)
                     # self.SetItemImage(child, self.fileidx, wx.TreeItemIcon_Normal)
         self.SetPyData(item, (dirname, True))
         self.Thaw()
