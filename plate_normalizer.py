@@ -375,6 +375,10 @@ class Controls(wx.Panel):
         countgenes = sorted([(-c, g) for g, c in self.normalization.gene_counts.iteritems()])
         countgenes = [(-c, g) for c, g in countgenes]
 
+        # if on windows, truncate to no more than 50 genes
+        if sys.platform == 'win32':
+            countgenes = countgenes[:50]
+
         panel = wx.Panel(self.scroll_window, -1)
         panel.BackgroundColour = "light blue"
         # XXX - this should be outside the scrolled area.
