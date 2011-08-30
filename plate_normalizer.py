@@ -12,14 +12,14 @@ import numpy as np
 try:
     from collections import OrderedDict
 except:
-    from ordereddict import OrderedDict # available on pypi
+    from ordereddict import OrderedDict  # available on pypi
 
 app_name = "Plate Normalizer"
 aboutText = """<p>Plate normalizer v0.1.</p>"""
 
 class HtmlWindow(wx.html.HtmlWindow):
-    def __init__(self, parent, id, size=(600,400)):
-        wx.html.HtmlWindow.__init__(self,parent, id, size=size)
+    def __init__(self, parent, id, size=(600, 400)):
+        wx.html.HtmlWindow.__init__(self, parent, id, size=size)
 
     def OnLinkClicked(self, link):
         wx.LaunchDefaultBrowser(link.GetHref())
@@ -27,8 +27,8 @@ class HtmlWindow(wx.html.HtmlWindow):
 class AboutBox(wx.Dialog):
     def __init__(self):
         wx.Dialog.__init__(self, None, -1, "About...",
-                           style=wx.DEFAULT_DIALOG_STYLE|wx.THICK_FRAME)
-        hwin = HtmlWindow(self, -1, size=(400,200))
+                           style=wx.DEFAULT_DIALOG_STYLE | wx.THICK_FRAME)
+        hwin = HtmlWindow(self, -1, size=(400, 200))
         hwin.SetPage(aboutText)
         self.SetClientSize(hwin.GetSize())
         self.CentreOnParent(wx.BOTH)
@@ -125,13 +125,13 @@ class PlateLayout(wx.Panel):
         shapeb1 = wx.RadioButton(self, -1, '96', style=wx.RB_GROUP)
         shapeb2 = wx.RadioButton(self, -1, '384')
         shapeb3 = wx.RadioButton(self, -1, DETECT)
-        shape_sizer.Add((1,1), 2)
+        shape_sizer.Add((1, 1), 2)
         shape_sizer.Add(shapeb1, 0)
-        shape_sizer.Add((1,1), 1)
+        shape_sizer.Add((1, 1), 1)
         shape_sizer.Add(shapeb2, 0)
-        shape_sizer.Add((1,1), 1)
+        shape_sizer.Add((1, 1), 1)
         shape_sizer.Add(shapeb3, 0)
-        shape_sizer.Add((1,1), 2)
+        shape_sizer.Add((1, 1), 2)
         shapeb3.Value = 1
 
         plate_column_box = wx.StaticBox(self, wx.ID_ANY, 'Plate column in spreadsheet')
@@ -164,7 +164,7 @@ class PlateLayout(wx.Panel):
 
         # make things align
         self.status_text.SetFont(wx.Font(pointSize=-1, family=wx.FONTFAMILY_MODERN,
-                                         style= wx.FONTSTYLE_NORMAL, weight=wx.FONTWEIGHT_NORMAL))
+                                         style=wx.FONTSTYLE_NORMAL, weight=wx.FONTWEIGHT_NORMAL))
 
         wells_combined.Value = True
         self.well_column_sizer.Hide(self.wellrow_selector)
@@ -260,24 +260,23 @@ class PlateLayout(wx.Panel):
                 # XXX - should we allow empty genes?
                 if plate == '':
                     # +2 because rowidx is 0-based, plus one for the head.
-                    assert row == col == gene == '', "Incomplete data at row %d (plate = '%s', row = '%s', col = '%s', gene = '%s')"%(rowidx + 2, plate, row, col, gene)
+                    assert row == col == gene == '', "Incomplete data at row %d (plate = '%s', row = '%s', col = '%s', gene = '%s')" % (rowidx + 2, plate, row, col, gene)
                     continue
                 if self.normalization.shape == '96':
-                    assert row in 'ABCDEFGH', "Bad row for 96 well plate - '%s' at spreadsheet row %d'"%(row, rowidx + 1)
-                    assert 1 <= int(col) <= 12, "Bad col for 96 well plate - '%s' at spreadsheet row %d'"%(col, rowidx + 1)
+                    assert row in 'ABCDEFGH', "Bad row for 96 well plate - '%s' at spreadsheet row %d'" % (row, rowidx + 1)
+                    assert 1 <= int(col) <= 12, "Bad col for 96 well plate - '%s' at spreadsheet row %d'" % (col, rowidx + 1)
                 else:
-                    assert 'A' <= row <= 'P', "Bad row for 384 well plate - '%s' at spreadsheet row %d'"%(row, rowidx + 1)
-                    assert 1 <= int(col) <= 24, "Bad col for 384 well plate - '%s' at spreadsheet row %d'"%(col, rowidx + 1)
+                    assert 'A' <= row <= 'P', "Bad row for 384 well plate - '%s' at spreadsheet row %d'" % (row, rowidx + 1)
+                    assert 1 <= int(col) <= 24, "Bad col for 384 well plate - '%s' at spreadsheet row %d'" % (col, rowidx + 1)
                     if (row > 'H') or (int(col) > 12):
                         self.detected_384 = True
                 num_rows += 1
                 wells_per_plate[plate] = wells_per_plate.get(plate, 0) + 1
                 gene_counts[gene] = gene_counts.get(gene, 0) + 1
 
-
             # XXX - check multiple plates for matching well/gene information
             # XXX - check uniqueness of wells (plate, row, col)
-
+            # 
             # count number of plates, wells, and wells per gene
             self.valid = True
             plate_shape = self.normalization.shape
@@ -288,19 +287,19 @@ class PlateLayout(wx.Panel):
                 self.normalization.detected_384 = self.detected_384
 
             if min(wells_per_plate.values()) == max(wells_per_plate.values()):
-                plate_counts_text = "Wells per plate: %d"%(wells_per_plate.values()[0])
+                plate_counts_text = "Wells per plate: %d" % (wells_per_plate.values()[0])
             else:
                 plate_counts_text = ["Variable number of wells per plate:"]
-                plate_counts_text += sorted(["    %s : %d"%(p, v) for p, v in wells_per_plate.iteritems()])
+                plate_counts_text += sorted(["    %s : %d" % (p, v) for p, v in wells_per_plate.iteritems()])
                 plate_counts_text = "\n".join(plate_counts_text)
 
             # report top 10 genes by count
             countgenes = sorted([(c, g) for g, c in gene_counts.iteritems()])[-10:][::-1]
-            gene_counts_text = "\n".join(["Number of wells per gene, top 10:"] + 
-                                         ["%12s : %d"%(g, c) for (c, g) in countgenes])
+            gene_counts_text = "\n".join(["Number of wells per gene, top 10:"] +
+                                         ["%12s : %d" % (g, c) for (c, g) in countgenes])
 
-            status = "\n".join(["Plate Type: %s%s" %(plate_shape, autodetected),
-                                "Number of plates: %d"%(len(wells_per_plate)),
+            status = "\n".join(["Plate Type: %s%s" % (plate_shape, autodetected),
+                                "Number of plates: %d" % (len(wells_per_plate)),
                                 plate_counts_text,
                                 gene_counts_text])
 
@@ -395,14 +394,13 @@ class Controls(wx.Panel):
             # panel.BackgroundColour = "white" if (idx % 5) else "light grey"
             self.row_sizer.Add(make_row(panel,
                                         wx.StaticText(panel, -1, gene),
-                                        wx.StaticText(panel, -1, "%d"%(count)),
+                                        wx.StaticText(panel, -1, "%d" % (count)),
                                         Controls.GeneControlButton(CONTROL_POPULATION, gene, panel, -1, style=wx.RB_GROUP),
                                         Controls.GeneControlButton(CONTROL_NEGATIVE, gene, panel, -1),
                                         Controls.GeneControlButton(CONTROL_POSITIVE, gene, panel, -1)),
                                0, wx.EXPAND)
             if idx % 5 == 4:
                 self.row_sizer.Add(wx.StaticLine(self.scroll_window), 0, wx.EXPAND | wx.ALL, 1)
-
 
         for g, c, t, n, p in self.row_controls[1:]:
             t.Value = True
@@ -421,15 +419,15 @@ class Feature(wx.Panel):
         self.feature_column_sizer = wx.StaticBoxSizer(feature_column_box, wx.VERTICAL)
         feature_column_selector = ColumnSelector(self, self.set_feature_column, '---', self.normalization, callback_args=(0,))
         self.feature_column_sizer.Add(feature_column_selector, 0, wx.EXPAND)
-        self.feature_column_sizer.Add((1,10), 1)
+        self.feature_column_sizer.Add((1, 10), 1)
 
         add_replicate_button = wx.Button(self, label="Add Replicate")
         remove_replicate_button = wx.Button(self, label="Remove Last Replicate")
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
         button_sizer.Add(add_replicate_button, 0)
-        button_sizer.Add((10,1), 0)
+        button_sizer.Add((10, 1), 0)
         button_sizer.Add(remove_replicate_button, 0)
-        button_sizer.Add((1,1), 2)
+        button_sizer.Add((1, 1), 2)
 
         add_replicate_button.Bind(wx.EVT_BUTTON, self.add_replicate)
         remove_replicate_button.Bind(wx.EVT_BUTTON, self.remove_replicate)
@@ -471,19 +469,19 @@ class Parameters(wx.Panel):
         iterations_box = wx.StaticBox(self, wx.ID_ANY, '')
         iterations_sizer = wx.StaticBoxSizer(iterations_box, wx.HORIZONTAL)
         iterations_control = wx.SpinCtrl(self, -1, value=str(self.normalization.num_iterations), min=0, max=20, initial=self.normalization.num_iterations)
-        iterations_sizer.Add((1,1), 1)
+        iterations_sizer.Add((1, 1), 1)
         iterations_sizer.Add(wx.StaticText(self, -1, "Number of iterations:"), 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 2)
         iterations_sizer.Add(iterations_control, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 2)
-        iterations_sizer.Add((1,1), 1)
+        iterations_sizer.Add((1, 1), 1)
 
         transform_box = wx.StaticBox(self, wx.ID_ANY, 'Data transformation')
         transform_sizer = wx.StaticBoxSizer(transform_box, wx.HORIZONTAL)
         transform_buttons = ([wx.RadioButton(self, -1, TRANSFORMATIONS[0], style=wx.RB_GROUP)]
                             + [wx.RadioButton(self, -1, label) for label in TRANSFORMATIONS[1:]])
-        transform_sizer.Add((1,1), 1)
+        transform_sizer.Add((1, 1), 1)
         for b in transform_buttons:
             transform_sizer.Add(b, 0)
-            transform_sizer.Add((1,1), 1)
+            transform_sizer.Add((1, 1), 1)
         transform_buttons[0].Value = 1
 
         plate_alignment_box = wx.StaticBox(self, wx.ID_ANY, 'Align plates?')
@@ -493,10 +491,10 @@ class Parameters(wx.Panel):
         align_when_buttons = ([wx.RadioButton(self, -1, ALIGN_WHEN[0], style=wx.RB_GROUP)]
                                 + [wx.RadioButton(self, -1, label) for label in ALIGN_WHEN[1:]])
         align_when_sizer.Add(wx.StaticText(self, -1, "When to align:"), 0)
-        align_when_sizer.Add((1,1,), 1)
+        align_when_sizer.Add((1, 1), 1)
         for b in align_when_buttons:
             align_when_sizer.Add(b, 0)
-            align_when_sizer.Add((1,1), 1)
+            align_when_sizer.Add((1, 1), 1)
         align_when_buttons[0].Value = 1
 
         align_how_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -504,10 +502,10 @@ class Parameters(wx.Panel):
                             + [wx.RadioButton(self, -1, label) for label in ALIGNMENT_METHODS[1:]])
         align_how_sizer.Add(wx.StaticLine(self), 0, wx.EXPAND | wx.ALL, 1)
         align_how_sizer.Add(wx.StaticText(self, -1, "How to align:"), 0)
-        align_how_sizer.Add((1,1), 1)
+        align_how_sizer.Add((1, 1), 1)
         for b in align_how_buttons:
             align_how_sizer.Add(b, 0)
-            align_how_sizer.Add((1,1), 1)
+            align_how_sizer.Add((1, 1), 1)
         align_how_buttons[0].Value = 1
 
         plate_alignment_sizer.Add(align_when_sizer, 0, wx.EXPAND | wx.ALL, 2)
@@ -518,13 +516,13 @@ class Parameters(wx.Panel):
         preview_button = wx.Button(self, -1, 'Preview normalization')
         save_button = wx.Button(self, -1, 'Save normalized values')
         save_figures_button = wx.Button(self, -1, 'Save figures')
-        preview_save_sizer.Add((1,1), 1)
+        preview_save_sizer.Add((1, 1), 1)
         preview_save_sizer.Add(preview_button, 0)
-        preview_save_sizer.Add((1,1), 1)
+        preview_save_sizer.Add((1, 1), 1)
         preview_save_sizer.Add(save_button, 0)
-        preview_save_sizer.Add((1,1), 1)
+        preview_save_sizer.Add((1, 1), 1)
         preview_save_sizer.Add(save_figures_button, 0)
-        preview_save_sizer.Add((1,1), 1)
+        preview_save_sizer.Add((1, 1), 1)
 
         self.topsizer = sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(iterations_sizer, 0, wx.ALL | wx.EXPAND, 5)
@@ -583,7 +581,7 @@ class Parameters(wx.Panel):
         if not output_file:
             return
         if os.path.exists(output_file):
-            dlg = wx.MessageDialog(self, "Will not overwrite existing file %s"%(output_file), "Warning", wx.OK|wx.ICON_WARNING)
+            dlg = wx.MessageDialog(self, "Will not overwrite existing file %s" % (output_file), "Warning", wx.OK|wx.ICON_WARNING)
             dlg.ShowModal()
             dlg.Destroy()
             return self.save(evt)
@@ -601,7 +599,8 @@ class Parameters(wx.Panel):
         if not plots_output_file:
             return
         if os.path.exists(plots_output_file):
-            dlg = wx.MessageDialog(self, "Will not overwrite existing file %s"%(plots_output_file), "Warning", wx.OK|wx.ICON_WARNING)
+            dlg = wx.MessageDialog(self, "Will not overwrite existing file %s" % (plots_output_file), "Warning", 
+                                   wx.OK | wx.ICON_WARNING)
             dlg.ShowModal()
             dlg.Destroy()
             return self.save_figures(evt)
@@ -652,7 +651,7 @@ class PlatePlot(Plot):
         norm = self.get_norm(lo, hi)
         xticklocs = range(0, 24, 2) if (self.normalization.plate_shape() == '384') else range(0, 12)
         yticklocs = range(0, 16, 2) if (self.normalization.plate_shape() == '384') else range(0, 8)
-        xticklabels = ["%02d"%(i+ 1) for i in xticklocs]
+        xticklabels = ["%02d" % (i+ 1) for i in xticklocs]
         yticklabels = ['ABCDEFGHIJKLMNOP'[i] for i in yticklocs]
         for plate_index in range(self.get_num_plates()):
             for rep in range(self.get_num_replicates()):
@@ -704,7 +703,7 @@ class OriginalPlates(PlatePlot):
         return self.normalization.plate_array(plate_index, rep)
 
     def post_draw(self, bad_data):
-        self.figure.suptitle('original%s'%(' (invalid values discarded)' if bad_data else ''))
+        self.figure.suptitle('original%s' % (' (invalid values discarded)' if bad_data else ''))
 
 
 class TransformedHistograms(Plot):
@@ -719,14 +718,14 @@ class TransformedHistograms(Plot):
             if len(good_data) > 0:
                 subplot.hist(good_data, 20)
         self.align_subplots()
-        self.figure.suptitle('transformed%s'%(' (invalid values discarded)' if bad_data else ''))
+        self.figure.suptitle('transformed%s' % (' (invalid values discarded)' if bad_data else ''))
 
 class TransformedPlates(PlatePlot):
     def get_plate(self, plate_index, rep):
         return self.normalization.plate_array(plate_index, rep, transformed=True)
 
     def post_draw(self, bad_data):
-        self.figure.suptitle('transformed%s'%(' (invalid values discarded)' if bad_data else ''))
+        self.figure.suptitle('transformed%s' % (' (invalid values discarded)' if bad_data else ''))
 
 
 class AlignedPlates(PlatePlot):
@@ -742,7 +741,7 @@ class AlignedPlates(PlatePlot):
         return self.normalization.normalization_first_alignment[plate_name, rep]
 
     def post_draw(self, bad_data):
-        self.figure.suptitle('transformed and aligned%s'%(' (invalid values discarded)' if bad_data else ''))
+        self.figure.suptitle('transformed and aligned%s' % (' (invalid values discarded)' if bad_data else ''))
 
 class MergedPlates(PlatePlot):
     def __init__(self, when, *args, **kwargs):
@@ -769,7 +768,7 @@ class MergedPlates(PlatePlot):
         return np.median(np.dstack(vals), 2)
 
     def post_draw(self, bad_data):
-        self.figure.suptitle('Merged %s'%(self.when))
+        self.figure.suptitle('Merged %s' % (self.when))
 
 class MergedInReplicatesPlates(PlatePlot):
     def __init__(self, when, *args, **kwargs):
@@ -795,7 +794,7 @@ class MergedInReplicatesPlates(PlatePlot):
         return np.median(np.dstack(vals), 2)
 
     def post_draw(self, bad_data):
-        self.figure.suptitle('Merged %s'%(self.when))
+        self.figure.suptitle('Merged %s' % (self.when))
 
 class CleanedPlates(PlatePlot):
     def pre_draw(self):
@@ -806,7 +805,7 @@ class CleanedPlates(PlatePlot):
         return self.normalization.normalization_plate_values[plate_name, rep]
 
     def post_draw(self, bad_data):
-        self.figure.suptitle('cleaned transformed %s'%(' (invalid values discarded)' if bad_data else ''))
+        self.figure.suptitle('cleaned transformed %s' % (' (invalid values discarded)' if bad_data else ''))
 
 
 class CleanedTransformedHistograms(Plot):
@@ -814,7 +813,7 @@ class CleanedTransformedHistograms(Plot):
         self.figure.suptitle('cleaned transformed')
         for repindex in range(self.normalization.num_replicates):
             subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, repindex + 1)
-            vals = np.hstack([self.normalization.normalization_plate_values[pl, rep] 
+            vals = np.hstack([self.normalization.normalization_plate_values[pl, rep]
                               for pl, rep in self.normalization.normalization_plate_values
                               if rep == repindex]).flatten()
             subplot.hist(vals, 20)
@@ -884,7 +883,7 @@ class Plots(wx.Panel):
         self.on_size(None)
 
     def on_size(self, evt):
-        self.Layout() # allows the plots to draw when the window first appears
+        self.Layout()  # allows the plots to draw when the window first appears
         height = self.scroll_window.ClientSize[1]
         width = int(height / np.sqrt(2))
         num_visible = len([p for p in self.panels.values() if p.IsShown()])
@@ -929,7 +928,7 @@ class Frame(wx.Frame):
         notebook.AddPage(self.plots, "Plots")
 
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(notebook, 1, wx.ALL|wx.EXPAND, 5)
+        sizer.Add(notebook, 1, wx.ALL | wx.EXPAND, 5)
         panel.SetSizer(sizer)
 
         self.Layout()
@@ -938,7 +937,7 @@ class Frame(wx.Frame):
     def on_close(self, event):
         dlg = wx.MessageDialog(self,
             "Do you really want to close this application?",
-            "Confirm Exit", wx.OK|wx.CANCEL|wx.ICON_QUESTION)
+            "Confirm Exit", wx.OK | wx.CANCEL | wx.ICON_QUESTION)
         result = dlg.ShowModal()
         dlg.Destroy()
         if result == wx.ID_OK:
@@ -952,9 +951,9 @@ class Frame(wx.Frame):
     def update_title(self):
         title = self.appname
         if self.normalization.input_file != '':
-            title += ' - %s'%(os.path.basename(self.normalization.input_file))
+            title += ' - %s' % (os.path.basename(self.normalization.input_file))
             if self.normalization.output_file != '':
-                title += ' -> %s'%(os.path.basename(self.normalization.output_file))
+                title += ' -> %s' % (os.path.basename(self.normalization.output_file))
         self.Title = title
 
 def main():
