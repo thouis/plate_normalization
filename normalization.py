@@ -228,6 +228,17 @@ class Normalization(object):
             vals = self.transform_data(vals)
         return vals
 
+    def get_transformed_values(self, repindex, cleaned=False):
+        if not cleaned:
+            vals = np.hstack([self.transformed_initial_plate_values[pl, rep]
+                              for pl, rep in sorted(self.transformed_initial_plate_values.keys())
+                              if rep == repindex]).flatten()
+        else:
+            vals = np.hstack([self.normalization_plate_values[pl, rep]
+                              for pl, rep in sorted(self.normalization_plate_values.keys())
+                              if rep == repindex]).flatten()
+        return vals
+
     def num_plates(self):
         return len(set(self.get_column_values(self.plate_column)))
 
@@ -357,6 +368,9 @@ class Normalization(object):
                 mask = (plate_names == plate_name)
                 temp[rows[mask], cols[mask]] = vals[mask]
                 self.normalization_plate_values[plate_name, repindex] = temp
+
+        # snapshot initial transformed state
+        self.transformed_initial_plate_values = self.normalization_plate_values
 
         control_types = np.array(self.fetch_control_types(), dtype=object)
         for plate_name in set(plate_names):

@@ -727,6 +727,37 @@ class TransformedPlates(PlatePlot):
     def post_draw(self, bad_data):
         self.figure.suptitle('transformed%s' % (' (invalid values discarded)' if bad_data else ''))
 
+class Agreement(Plot):
+    def do_draw(self):
+        self.pre_draw()
+        nreps = self.normalization.num_replicates
+        npairs = (nreps * (nreps - 1)) / 2
+        bad_data = False
+        pairidx = 1
+        for rep_a in range(self.normalization.num_replicates):
+            data_a = self.normalization.get_transformed_values(rep_a, cleaned=self.cleaned)
+            for rep_b in range(rep_a):
+                subplot = self.figure.add_subplot(npairs, 1, pairidx)
+                pairidx += 1
+                data_b = self.normalization.get_transformed_values(rep_b, cleaned=self.cleaned)
+                good_mask = np.isfinite(data_a + data_b)
+                bad_data = np.any(~ good_mask)
+                if any(good_mask):
+                    # XXX - add multiple populations by color
+                    subplot.plot(data_b[good_mask], data_a[good_mask], '.')
+                    subplot.set_xlabel('replicate %d' % (rep_b + 1))
+                    subplot.set_ylabel('replicate %d' % (rep_a + 1))
+                    subplot.axis('equal')
+        self.figure.suptitle('transformed%s' % (' (invalid values discarded)' if bad_data else ''))
+
+    def pre_draw(self):
+        self.normalization.run_normalization()
+
+class TransformedAgreement(Agreement):
+    cleaned = False
+
+class CleanedAgreement(Agreement):
+    cleaned = True
 
 class AlignedPlates(PlatePlot):
     def do_draw(self):
@@ -836,11 +867,13 @@ class Plots(wx.Panel):
         self.panels['original platemaps'] = OriginalPlates(subpanel, normalization)
         self.panels['transformed data'] = TransformedHistograms(subpanel, normalization)
         self.panels['transformed platemaps'] = TransformedPlates(subpanel, normalization)
+        self.panels['transformed agreement'] = TransformedAgreement(subpanel, normalization)
         self.panels['aligned platemaps'] = AlignedPlates(subpanel, normalization)
         self.panels['merged before'] = MergedPlates('before', subpanel, normalization)
         self.panels['merged before inrep'] = MergedInReplicatesPlates('before', subpanel, normalization)
         self.panels['merged after inrep'] = MergedInReplicatesPlates('after', subpanel, normalization)
         self.panels['merged after'] = MergedPlates('after', subpanel, normalization)
+        self.panels['cleaned agreement'] = CleanedAgreement(subpanel, normalization)
         self.panels['cleaned plates'] = CleanedPlates(subpanel, normalization)
         self.panels['cleaned data'] = CleanedTransformedHistograms(subpanel, normalization)
 
@@ -849,11 +882,13 @@ class Plots(wx.Panel):
         sizer.Add(self.panels['original platemaps'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['transformed data'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['transformed platemaps'], 1, wx.ALL | wx.EXPAND, 1)
+        sizer.Add(self.panels['transformed agreement'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['aligned platemaps'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged before'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged before inrep'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged after inrep'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged after'], 1, wx.ALL | wx.EXPAND, 1)
+        sizer.Add(self.panels['cleaned agreement'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned plates'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned data'], 1, wx.ALL | wx.EXPAND, 1)
         subpanel.SetSizer(sizer)
