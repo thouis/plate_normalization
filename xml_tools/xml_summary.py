@@ -265,7 +265,7 @@ def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment):
         return name
 
     xmlfiles.sort()
-    book = xlwt.Workbook()
+    book = xlwt.Workbook(encoding='utf-8')
     cursheet = book.add_sheet(make_sheetname(xmlfiles[0][0]))
 
     numsheets = 1
