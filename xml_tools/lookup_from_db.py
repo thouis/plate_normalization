@@ -1,6 +1,6 @@
 import MySQLdb
 
-conn = MySQLdb.connect('ptilouis', 'biophenics', 'biophenics', 'biophenics')
+conn = MySQLdb.connect('ptilouis', 'biophenics', 'biophenics', 'biophenics', use_unicode=True)
 cursor = conn.cursor()
 
 platelist = None
