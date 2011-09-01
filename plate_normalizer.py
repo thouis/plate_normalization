@@ -714,21 +714,24 @@ class Histograms(Plot):
             if len(good_data) > 0:
                 subplot.hist(good_data, 20)
         self.align_subplots()
-        self.figure.suptitle('%stransformed%s' % ('cleaned ' if self.cleaned else '',
-                                                  ' (invalid values discarded)' if bad_data else ''))
+        self.figure.suptitle('%s%s' % (self.title,
+                                       ' (invalid values discarded)' if bad_data else ''))
 
     def pre_draw(self):
         self.normalization.run_normalization()
 
 class OriginalHistograms(Histograms):
+    title = 'original'
     cleaned = False
     original = True
 
 class TransformedHistograms(Histograms):
+    title = 'transformed'
     original = False
     cleaned = False
 
 class CleanedTransformedHistograms(Histograms):
+    title = 'cleaned transformed'
     original = False
     cleaned = True
 

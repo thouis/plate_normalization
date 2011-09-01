@@ -184,6 +184,7 @@ class Normalization(object):
     def set_replicate_feature(self, index, val):
         self.need_renorm = True
         self.replicate_features[index] = val
+        self.cached_replicate_data = {}
         if self.ready():
             self.feature_selection_finished()
 
