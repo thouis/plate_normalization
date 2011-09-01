@@ -100,6 +100,7 @@ class Normalization(object):
         # used for fetching columns
         self.cached_book = None
         self.cached_values = {}
+        self.cached_replicate_data = {}
 
         self.need_renorm = True
 
@@ -141,6 +142,7 @@ class Normalization(object):
     def get_column_values(self, column_specifier):
         if self.book != self.cached_book:
             self.cached_values = {}
+            self.cached_replicate_data = {}
             self.cached_book = self.book
         if column_specifier not in self.cached_values:
             self.cached_values[column_specifier] = [cell.value for cell in self.book.sheet_by_index(column_specifier[0]).col(column_specifier[1])[1:]]
@@ -223,7 +225,13 @@ class Normalization(object):
             return logit(vals / 100.0)
 
     def get_replicate_data(self, repindex, transformed=False):
-        vals = np.array([safe_float(v) for v in self.get_column_values(self.replicate_features[repindex])])
+        if self.book != self.cached_book:
+            self.cached_replicate_data = {}
+            self.cached_values = {}
+            self.cached_book = self.book
+        if repindex not in self.cached_replicate_data:
+            self.cached_replicate_data[repindex] = np.array([safe_float(v) for v in self.get_column_values(self.replicate_features[repindex])])
+        vals = self.cached_replicate_data[repindex]
         if transformed:
             vals = self.transform_data(vals)
         return vals
@@ -256,10 +264,10 @@ class Normalization(object):
     def plate_array(self, plate_name, repindex, transformed=False):
         if isinstance(plate_name, int):
             plate_name = self.plate_names()[plate_name]
-        plate_mask = np.array([v == plate_name for v in self.get_column_values(self.plate_column)])
+        plate_mask = (np.array(self.get_column_values(self.plate_column)) == plate_name)
         indices = plate_mask.nonzero()[0]
-        rows = np.array([ord(r) - ord('A') for r in self.fetch_rows()])
-        cols = np.array([int(c) - 1 for c in self.fetch_cols()])
+        rows = np.array(self.fetch_rows()).view('uint32') - ord('A')
+        cols = np.array(self.fetch_cols()).astype(int) - 1
         vals = np.array(self.get_replicate_data(repindex, transformed))
         output = np.zeros(self.plate_dims(), np.float)
         output[rows[indices], cols[indices]] = vals[indices]

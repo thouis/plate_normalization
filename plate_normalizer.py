@@ -706,19 +706,30 @@ class OriginalPlates(PlatePlot):
         self.figure.suptitle('original%s' % (' (invalid values discarded)' if bad_data else ''))
 
 
-class TransformedHistograms(Plot):
+class Histograms(Plot):
     def do_draw(self):
+        self.pre_draw()
         bad_data = False
         for rep in range(self.normalization.num_replicates):
             subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep + 1)
-            data = self.normalization.get_replicate_data(rep, transformed=True)
-            good_data = data[np.isfinite(data)]
-            if np.any(data != good_data):
-                bad_data = True
+            data = self.normalization.get_transformed_values(rep, cleaned=self.cleaned)
+            good_mask = np.isfinite(data)
+            bad_data = bad_data or np.any(~ good_mask)
+            good_data = data[good_mask]
             if len(good_data) > 0:
                 subplot.hist(good_data, 20)
         self.align_subplots()
-        self.figure.suptitle('transformed%s' % (' (invalid values discarded)' if bad_data else ''))
+        self.figure.suptitle('%stransformed%s' % ('cleaned ' if self.cleaned else '',
+                                                  ' (invalid values discarded)' if bad_data else ''))
+
+    def pre_draw(self):
+        self.normalization.run_normalization()
+
+class TransformedHistograms(Histograms):
+    cleaned = False
+
+class CleanedTransformedHistograms(Histograms):
+    cleaned = True
 
 class TransformedPlates(PlatePlot):
     def get_plate(self, plate_index, rep):
@@ -748,7 +759,8 @@ class Agreement(Plot):
                     subplot.set_xlabel('replicate %d' % (rep_b + 1))
                     subplot.set_ylabel('replicate %d' % (rep_a + 1))
                     subplot.axis('equal')
-        self.figure.suptitle('transformed%s' % (' (invalid values discarded)' if bad_data else ''))
+        self.figure.suptitle('%stransformed%s' % ('cleaned ' if self.cleaned else '',
+                                                  ' (invalid values discarded)' if bad_data else ''))
 
     def pre_draw(self):
         self.normalization.run_normalization()
@@ -839,17 +851,6 @@ class CleanedPlates(PlatePlot):
         self.figure.suptitle('cleaned transformed %s' % (' (invalid values discarded)' if bad_data else ''))
 
 
-class CleanedTransformedHistograms(Plot):
-    def do_draw(self):
-        self.figure.suptitle('cleaned transformed')
-        for repindex in range(self.normalization.num_replicates):
-            subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, repindex + 1)
-            vals = np.hstack([self.normalization.normalization_plate_values[pl, rep]
-                              for pl, rep in self.normalization.normalization_plate_values
-                              if rep == repindex]).flatten()
-            subplot.hist(vals, 20)
-        self.align_subplots()
-
 class Plots(wx.Panel):
     def __init__(self, parent, normalization):
         wx.Panel.__init__(self, parent=parent)
@@ -883,7 +884,7 @@ class Plots(wx.Panel):
         sizer.Add(self.panels['transformed data'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['transformed platemaps'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['transformed agreement'], 1, wx.ALL | wx.EXPAND, 1)
-        sizer.Add(self.panels['aligned platemaps'], 1, wx.ALL | wx.EXPAND, 1)
+        sizer.Add(self.panels['aligned platemaps'], 1, wx.ALL | wx.EXPAND, 1, )
         sizer.Add(self.panels['merged before'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged before inrep'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged after inrep'], 1, wx.ALL | wx.EXPAND, 1)
@@ -904,6 +905,9 @@ class Plots(wx.Panel):
 
         normalization.parameter_change_listeners.append(self.update_parameters)
 
+        # force an update of visible plots
+        self.update_parameters()
+
     def update_plots(self):
         # XXX - should have some way to mark plots dirty
         for p in self.panels.values():
@@ -915,6 +919,8 @@ class Plots(wx.Panel):
         self.panel_sizer.Show(self.panels['aligned platemaps'], self.normalization.align_when != ALIGN_NEVER)
         self.panel_sizer.Show(self.panels['merged before'], self.normalization.num_replicates > 1)
         self.panel_sizer.Show(self.panels['merged after'], self.normalization.num_replicates > 1)
+        self.panel_sizer.Show(self.panels['transformed agreement'], self.normalization.num_replicates > 1)
+        self.panel_sizer.Show(self.panels['cleaned agreement'], self.normalization.num_replicates > 1)
         self.on_size(None)
 
     def on_size(self, evt):
