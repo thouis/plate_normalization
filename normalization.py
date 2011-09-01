@@ -437,6 +437,7 @@ class Normalization(object):
         write_row(0, 0, "Plate", "Row", "Column", "Gene", *["rep%d"%(r + 1) for r in range(self.num_replicates)])
         for rowidx, (pl, r, c, g) in enumerate(zip(plates, rows, cols, genes)):
             vals = [get_normalized_value(pl, r, c, ridx) for ridx in range(self.num_replicates)]
+            vals = [v if np.isfinite(v) else "" for v in vals]
             write_row(rowidx + 1, 0, pl, r, c, g, *vals)
 
         # Write per-replicate median and MAD of all wells, population, negative controls, positive controls
