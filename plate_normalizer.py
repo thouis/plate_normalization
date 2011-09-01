@@ -690,14 +690,6 @@ class PlatePlot(Plot):
         # can be overriden for plots that want to show combined plates
         return self.normalization.num_plates()
 
-class OriginalHistograms(Plot):
-    def do_draw(self):
-        self.figure.suptitle('original')
-        for rep in range(self.normalization.num_replicates):
-            subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep + 1)
-            subplot.hist(self.normalization.get_replicate_data(rep), 20)
-        self.align_subplots()
-
 class OriginalPlates(PlatePlot):
     def get_plate(self, plate_index, rep):
         return self.normalization.plate_array(plate_index, rep)
@@ -712,7 +704,10 @@ class Histograms(Plot):
         bad_data = False
         for rep in range(self.normalization.num_replicates):
             subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep + 1)
-            data = self.normalization.get_transformed_values(rep, cleaned=self.cleaned)
+            if self.original:
+                data = self.normalization.get_replicate_data(rep)
+            else:
+                data = self.normalization.get_transformed_values(rep, cleaned=self.cleaned)
             good_mask = np.isfinite(data)
             bad_data = bad_data or np.any(~ good_mask)
             good_data = data[good_mask]
@@ -725,10 +720,16 @@ class Histograms(Plot):
     def pre_draw(self):
         self.normalization.run_normalization()
 
+class OriginalHistograms(Histograms):
+    cleaned = False
+    original = True
+
 class TransformedHistograms(Histograms):
+    original = False
     cleaned = False
 
 class CleanedTransformedHistograms(Histograms):
+    original = False
     cleaned = True
 
 class TransformedPlates(PlatePlot):
