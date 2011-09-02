@@ -171,7 +171,11 @@ class Normalization(object):
 
     def set_control_type(self, gene, control_type):
         self.need_renorm = True
-        self.gene_to_control_type[gene] = control_type
+        if control_type != CONTROL_POPULATION:
+            self.gene_to_control_type[gene] = control_type
+        elif gene in self.gene_to_control_type:
+            del self.gene_to_control_type[gene]
+        self.parameter_changed()
 
     def ready(self):
         if self.num_replicates == 0:
@@ -185,6 +189,7 @@ class Normalization(object):
         self.need_renorm = True
         self.replicate_features[index] = val
         self.cached_replicate_data = {}
+        self.parameter_changed()
         if self.ready():
             self.feature_selection_finished()
 
@@ -247,6 +252,17 @@ class Normalization(object):
                               for pl, rep in sorted(self.normalization_plate_values.keys())
                               if rep == repindex]).flatten()
         return vals
+
+    def get_transformed_control_groups(self):
+        # needs to be in the same order as get_transformed_values()
+        return (np.hstack([self.normalization_control_groups[pl] for pl in self.plate_names()]).flatten(),
+                self.normalization_control_labels)
+
+    def fetch_control_groups(self):
+        control_keys = sorted(list(self.gene_to_control_type.keys())) # sorted so DMSO, GL2 before KIF11
+        control_groups = [control_keys.index(g) + 1 if g in self.gene_to_control_type else 0
+                          for g in self.fetch_genes()]
+        return np.array(control_groups), ['tested'] + control_keys
 
     def num_plates(self):
         return len(set(self.get_column_values(self.plate_column)))
@@ -365,6 +381,7 @@ class Normalization(object):
             return
         self.normalization_plate_values = {}
         self.normalization_control_maps = {}
+        self.normalization_control_groups = {}
         rows = np.array([ord(r) - ord('A') for r in self.fetch_rows()])
         cols = np.array([int(c) - 1 for c in self.fetch_cols()])
 
@@ -387,6 +404,15 @@ class Normalization(object):
             mask = (plate_names == plate_name)
             temp[rows[mask], cols[mask]] = control_types[mask]
             self.normalization_control_maps[plate_name] = temp
+
+        control_groups, self.normalization_control_labels = self.fetch_control_groups()
+        control_groups = np.array(control_groups)
+        for plate_name in set(plate_names):
+            temp = np.zeros(self.plate_dims(), dtype=object)
+            mask = (plate_names == plate_name)
+            temp[rows[mask], cols[mask]] = control_groups[mask]
+            self.normalization_control_groups[plate_name] = temp
+
 
         # total shifts
         self.normalization_total_plate_shifts = dict(((pl, repindex), 0.0) for (pl, repindex) in self.normalization_plate_values)

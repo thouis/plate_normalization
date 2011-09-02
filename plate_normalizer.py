@@ -50,13 +50,14 @@ class TabPanel(wx.Panel):
         self.SetSizer(sizer)
 
 class ColumnSelector(wx.Panel):
-    def __init__(self, parent, callback, substring_hint, normalization, callback_args=[]):
+    def __init__(self, parent, callback, substring_hints, normalization, callback_args=[]):
         """ """
         wx.Panel.__init__(self, parent=parent)
         self.callback = callback
-        self.substring_hint = substring_hint
+        self.substring_hints = substring_hints
         self.normalization = normalization
         self.sheet_idx = 0
+        self.prev_colidx = None
         self.callback_args = callback_args
 
         self.sheet_selector = wx.ComboBox(self, -1, choices=[], style=wx.CB_READONLY)
@@ -90,7 +91,10 @@ class ColumnSelector(wx.Panel):
         self.column_selector.Clear()
         column_names = [c.value for c in self.normalization.book.sheet_by_index(sheet_idx).row(0)]
         self.column_selector.AppendItems(column_names)
-        default = min([idx for idx, name in enumerate(column_names) if self.substring_hint in name.lower()] or [-1])
+        self.prev_colidx = None
+        default = min([idx for idx, name in enumerate(column_names)
+                       if any([hint in name.lower() for hint in self.substring_hints])]
+                      or [-1])
         if default > -1:
             self.column_selector.Selection = default
             newevt = wx.PyCommandEvent(wx.wxEVT_COMMAND_COMBOBOX_SELECTED)
@@ -106,7 +110,9 @@ class ColumnSelector(wx.Panel):
 
     def select_column(self, evt):
         colidx = evt.GetSelection()
-        self.callback((self.sheet_idx, colidx), *self.callback_args)
+        if colidx != self.prev_colidx:
+            self.prev_colidx = colidx
+            self.callback((self.sheet_idx, colidx), *self.callback_args)
 
 class PlateLayout(wx.Panel):
     def __init__(self, parent, normalization):
@@ -136,16 +142,16 @@ class PlateLayout(wx.Panel):
 
         plate_column_box = wx.StaticBox(self, wx.ID_ANY, 'Plate column in spreadsheet')
         plate_column_sizer = wx.StaticBoxSizer(plate_column_box, wx.VERTICAL)
-        plate_column_selector = ColumnSelector(self, self.set_plate_column, 'plate', self.normalization)
+        plate_column_selector = ColumnSelector(self, self.set_plate_column, ['plate'], self.normalization)
         plate_column_sizer.Add(plate_column_selector, 0, wx.EXPAND)
 
         well_column_box = wx.StaticBox(self, wx.ID_ANY, 'Well column(s) in spreadsheet')
         self.well_column_sizer = wx.StaticBoxSizer(well_column_box, wx.VERTICAL)
         wells_combined = self.wells_combined = wx.RadioButton(self, -1, 'Wells in single spreadsheet column', style=wx.RB_GROUP)
         wells_separate = wx.RadioButton(self, -1, 'Rows && columns in separate spreadsheet columns')
-        self.well_selector = ColumnSelector(self, self.set_well_column, 'well', self.normalization)
-        self.wellrow_selector = ColumnSelector(self, self.set_wellrow_column, 'row', self.normalization)
-        self.wellcol_selector = ColumnSelector(self, self.set_wellcol_column, 'col', self.normalization)
+        self.well_selector = ColumnSelector(self, self.set_well_column, ['well'], self.normalization)
+        self.wellrow_selector = ColumnSelector(self, self.set_wellrow_column, ['row'], self.normalization)
+        self.wellcol_selector = ColumnSelector(self, self.set_wellcol_column, ['col'], self.normalization)
         self.well_column_sizer.Add(wells_combined, 0)
         self.well_column_sizer.Add(wells_separate, 0, wx.TOP, 5)
         self.well_column_sizer.Add(self.well_selector, 0, wx.EXPAND | wx.TOP, 5)
@@ -154,7 +160,8 @@ class PlateLayout(wx.Panel):
 
         gene_column_box = wx.StaticBox(self, wx.ID_ANY, 'Gene/Chemical column in spreadsheet')
         gene_column_sizer = wx.StaticBoxSizer(gene_column_box, wx.VERTICAL)
-        self.gene_column_selector = ColumnSelector(self, self.set_gene_column, 'gene', self.normalization)
+        self.gene_column_selector = ColumnSelector(self, self.set_gene_column, ['gene', 'compound', 'treatment'], 
+                                                   self.normalization)
         gene_column_sizer.Add(self.gene_column_selector, 0, wx.EXPAND)
 
         status_box = wx.StaticBox(self, wx.ID_ANY, 'Status')
@@ -417,7 +424,7 @@ class Feature(wx.Panel):
 
         feature_column_box = wx.StaticBox(self, wx.ID_ANY, 'Feature columns for each replicate')
         self.feature_column_sizer = wx.StaticBoxSizer(feature_column_box, wx.VERTICAL)
-        feature_column_selector = ColumnSelector(self, self.set_feature_column, '---', self.normalization, callback_args=(0,))
+        feature_column_selector = ColumnSelector(self, self.set_feature_column, [], self.normalization, callback_args=(0,))
         self.feature_column_sizer.Add(feature_column_selector, 0, wx.EXPAND)
         self.feature_column_sizer.Add((1, 10), 1)
 
@@ -442,7 +449,7 @@ class Feature(wx.Panel):
         self.normalization.set_replicate_feature(replicate_index, val)
 
     def add_replicate(self, evt):
-        feature_column_selector = ColumnSelector(self, self.set_feature_column, '---', self.normalization, callback_args=(self.num_replicates,))
+        feature_column_selector = ColumnSelector(self, self.set_feature_column, [], self.normalization, callback_args=(self.num_replicates,))
         self.feature_column_sizer.Insert(self.num_replicates * 2, feature_column_selector, 0, wx.EXPAND)
         self.feature_column_sizer.Insert(self.num_replicates * 2 + 1, (1, 10), 0)
         self.num_replicates += 1
@@ -749,22 +756,63 @@ class Agreement(Plot):
         npairs = (nreps * (nreps - 1)) / 2
         bad_data = False
         pairidx = 1
+
+        # find control status, and unique groups (by treatment) in controls
+        control_groups, control_names = self.normalization.get_transformed_control_groups()
+        num_control_groups = max(control_groups) + 1
+
+        lo = np.inf
+        hi = -np.inf
+
+        subplots = []
+
         for rep_a in range(self.normalization.num_replicates):
             data_a = self.normalization.get_transformed_values(rep_a, cleaned=self.cleaned)
             for rep_b in range(rep_a):
-                subplot = self.figure.add_subplot(npairs, 1, pairidx)
+                subplot = self.figure.add_subplot(npairs, 1, pairidx, aspect='equal')
+                subplots.append(subplot)
                 pairidx += 1
                 data_b = self.normalization.get_transformed_values(rep_b, cleaned=self.cleaned)
                 good_mask = np.isfinite(data_a + data_b)
                 bad_data = np.any(~ good_mask)
                 if any(good_mask):
-                    # XXX - add multiple populations by color
-                    subplot.plot(data_b[good_mask], data_a[good_mask], '.')
+                    lo = min(min(data_a[good_mask]), min(data_b[good_mask]), lo)
+                    hi = max(max(data_a[good_mask]), max(data_b[good_mask]), hi)
+                    # black first = tested population
+                    colors = list('kgrbcmy')
+                    for control_idx in range(num_control_groups):
+                        subplot.scatter(data_b[(control_groups == control_idx) & good_mask],
+                                        data_a[(control_groups == control_idx) & good_mask],
+                                        s=10,
+                                        marker='o',
+                                        color=(colors.pop(0) if colors else None),
+                                        zorder=-control_idx,  # tested population on top
+                                        label=control_names[control_idx],
+                                        alpha=0.3)
                     subplot.set_xlabel('replicate %d' % (rep_b + 1))
                     subplot.set_ylabel('replicate %d' % (rep_a + 1))
-                    subplot.axis('equal')
-        self.figure.suptitle('%stransformed%s' % ('cleaned ' if self.cleaned else '',
-                                                  ' (invalid values discarded)' if bad_data else ''))
+                    if pairidx <= npairs:  # turn off xtick labels for all but last plot
+                        subplot.set_xticklabels([])
+                        subplot.get_xaxis().labelpad = 0
+
+        # add legend above first plot
+        legend = subplot.legend(loc='upper center', scatterpoints=1,
+                                ncol=3, mode="expand", frameon=False,
+                                bbox_to_anchor=(0, 0, 1, 1), bbox_transform=self.figure.transFigure,
+                                title='%stransformed%s' % ('cleaned ' if self.cleaned else '',
+                                                           ' (invalid values discarded)' if bad_data else ''))
+
+        # set legend font size
+        for t in legend.get_texts():
+            t.set_fontsize('small')
+
+        # give some space around data
+        border = (hi - lo) / 20
+        lo -= border
+        hi += border
+        # make every subplot have identical limits
+        for subplot in subplots:
+            subplot.axis([lo, hi, lo, hi])
 
     def pre_draw(self):
         self.normalization.run_normalization()
