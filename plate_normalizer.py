@@ -781,6 +781,8 @@ class Agreement(Plot):
                     # black first = tested population
                     colors = list('kgrbcmy')
                     for control_idx in range(num_control_groups):
+                        if not np.any((control_groups == control_idx) & good_mask):
+                            continue
                         subplot.scatter(data_b[(control_groups == control_idx) & good_mask],
                                         data_a[(control_groups == control_idx) & good_mask],
                                         s=10,
@@ -891,6 +893,31 @@ class MergedInReplicatesPlates(PlatePlot):
     def post_draw(self, bad_data):
         self.figure.suptitle('Merged %s' % (self.when))
 
+class MedianZScorePlate(PlatePlot):
+    def pre_draw(self):
+        self.normalization.run_normalization()
+
+    def get_num_replicates(self):
+        return 1
+
+    def get_num_plates(self):
+        return self.normalization.num_replicates + 1
+
+    def get_plate(self, plate_index, rep):
+        print "called", plate_index, rep
+        if plate_index < self.normalization.num_replicates:
+            print "sub"
+            # fetch vals
+            vals = np.dstack([v for (pl, r), v in self.normalization.normalization_plate_values.iteritems() if r == plate_index])
+            # convert to absolute-robust-Z-scores
+            vals = vals - np.median(vals.flatten())
+            vals = abs(vals / (1.4826 * np.median(abs(vals.flatten()))))
+            return np.median(vals, 2)
+        return np.median(np.dstack([self.get_plate(idx, 0) for idx in range(self.normalization.num_replicates)]), 2)
+
+    def post_draw(self, bad_data):
+        self.figure.suptitle('Median-abs-z-score (last plate is median of MAZS)')
+
 class CleanedPlates(PlatePlot):
     def pre_draw(self):
         self.normalization.run_normalization()
@@ -926,6 +953,7 @@ class Plots(wx.Panel):
         self.panels['merged before inrep'] = MergedInReplicatesPlates('before', subpanel, normalization)
         self.panels['merged after inrep'] = MergedInReplicatesPlates('after', subpanel, normalization)
         self.panels['merged after'] = MergedPlates('after', subpanel, normalization)
+        self.panels['medabsz'] = MedianZScorePlate( subpanel, normalization)
         self.panels['cleaned agreement'] = CleanedAgreement(subpanel, normalization)
         self.panels['cleaned plates'] = CleanedPlates(subpanel, normalization)
         self.panels['cleaned data'] = CleanedTransformedHistograms(subpanel, normalization)
@@ -941,6 +969,7 @@ class Plots(wx.Panel):
         sizer.Add(self.panels['merged before inrep'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged after inrep'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged after'], 1, wx.ALL | wx.EXPAND, 1)
+        sizer.Add(self.panels['medabsz'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned agreement'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned plates'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned data'], 1, wx.ALL | wx.EXPAND, 1)
