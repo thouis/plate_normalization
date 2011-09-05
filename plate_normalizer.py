@@ -381,10 +381,10 @@ class Controls(wx.Panel):
         countgenes = sorted([(-c, g) for g, c in self.normalization.gene_counts.iteritems()])
         countgenes = [(-c, g) for c, g in countgenes]
 
-        # if on windows, truncate to no more than 50 genes
-        if sys.platform == 'win32':
-            countgenes = countgenes[:50]
+        # truncate to no more than 50 genes
+        countgenes = countgenes[:50]
 
+        self.scroll_window.Freeze()
         panel = wx.Panel(self.scroll_window, -1)
         panel.BackgroundColour = "light blue"
         # XXX - this should be outside the scrolled area.
@@ -412,6 +412,7 @@ class Controls(wx.Panel):
         for g, c, t, n, p in self.row_controls[1:]:
             t.Value = True
 
+        self.scroll_window.Thaw()
         self.row_sizer.Layout()
         self.scroll_window.VirtualSize = self.scroll_window.BestVirtualSize
 
@@ -709,6 +710,11 @@ class Histograms(Plot):
     def do_draw(self):
         self.pre_draw()
         bad_data = False
+
+        # find control status, and unique groups (by treatment) in controls
+        control_groups, control_names = self.normalization.get_transformed_control_groups()
+        num_control_groups = max(control_groups) + 1
+
         for rep in range(self.normalization.num_replicates):
             subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep + 1)
             if self.original:
@@ -717,12 +723,28 @@ class Histograms(Plot):
                 data = self.normalization.get_transformed_values(rep, cleaned=self.cleaned)
             good_mask = np.isfinite(data)
             bad_data = bad_data or np.any(~ good_mask)
-            good_data = data[good_mask]
-            if len(good_data) > 0:
-                subplot.hist(good_data, 20)
+            # black first = tested population
+            colors = list('kgrbcmy')
+            for control_idx in range(num_control_groups):
+                ctrl_good_mask = (control_groups == control_idx) & good_mask
+                if not np.any(ctrl_good_mask):
+                    continue
+                subplot.hist(data[ctrl_good_mask], 20,
+                             color=(colors.pop(0) if colors else None),
+                             alpha=0.5,
+                             label=control_names[control_idx] or '---')
         self.align_subplots()
-        self.figure.suptitle('%s%s' % (self.title,
+
+        # add legend above first plot
+        legend = subplot.legend(loc='upper center', scatterpoints=1,
+                                ncol=4, mode="expand", frameon=False,
+                                bbox_to_anchor=(0, 0, 1, 1), bbox_transform=self.figure.transFigure,
+                                title='%s%s' % (self.title,
                                        ' (invalid values discarded)' if bad_data else ''))
+
+        # set legend font size
+        for t in legend.get_texts():
+            t.set_fontsize('small')
 
     def pre_draw(self):
         self.normalization.run_normalization()
@@ -781,15 +803,16 @@ class Agreement(Plot):
                     # black first = tested population
                     colors = list('kgrbcmy')
                     for control_idx in range(num_control_groups):
-                        if not np.any((control_groups == control_idx) & good_mask):
+                        ctrl_good_mask = (control_groups == control_idx) & good_mask
+                        if not np.any(ctrl_good_mask):
                             continue
-                        subplot.scatter(data_b[(control_groups == control_idx) & good_mask],
-                                        data_a[(control_groups == control_idx) & good_mask],
+                        subplot.scatter(data_b[ctrl_good_mask],
+                                        data_a[ctrl_good_mask],
                                         s=10,
                                         marker='o',
                                         color=(colors.pop(0) if colors else None),
                                         zorder=-control_idx,  # tested population on top
-                                        label=control_names[control_idx],
+                                        label=control_names[control_idx] or '---',
                                         alpha=0.3)
                     subplot.set_xlabel('replicate %d' % (rep_b + 1))
                     subplot.set_ylabel('replicate %d' % (rep_a + 1))
@@ -799,7 +822,7 @@ class Agreement(Plot):
 
         # add legend above first plot
         legend = subplot.legend(loc='upper center', scatterpoints=1,
-                                ncol=3, mode="expand", frameon=False,
+                                ncol=4, mode="expand", frameon=False,
                                 bbox_to_anchor=(0, 0, 1, 1), bbox_transform=self.figure.transFigure,
                                 title='%stransformed%s' % ('cleaned ' if self.cleaned else '',
                                                            ' (invalid values discarded)' if bad_data else ''))
@@ -904,9 +927,7 @@ class MedianZScorePlate(PlatePlot):
         return self.normalization.num_replicates + 1
 
     def get_plate(self, plate_index, rep):
-        print "called", plate_index, rep
         if plate_index < self.normalization.num_replicates:
-            print "sub"
             # fetch vals
             vals = np.dstack([v for (pl, r), v in self.normalization.normalization_plate_values.iteritems() if r == plate_index])
             # convert to absolute-robust-Z-scores
