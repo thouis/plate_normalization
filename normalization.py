@@ -456,7 +456,15 @@ class Normalization(object):
 
         def get_normalized_value(pl, r, c, repidx):
             try:
-                return self.normalization_plate_values[pl, repidx][ord(r) - ord('A'), int(c) - 1]
+                v = self.normalization_plate_values[pl, repidx][ord(r) - ord('A'), int(c) - 1]
+                if np.isfinite(v):
+                    return v
+                if np.isnan(v):
+                    return 'NaN'
+                if v > 0:
+                    return '+inf'
+                return '-inf'
+                return 
             except:
                 return ""
 
@@ -464,7 +472,6 @@ class Normalization(object):
         write_row(0, 0, "Plate", "Row", "Column", "Gene", *["rep%d"%(r + 1) for r in range(self.num_replicates)])
         for rowidx, (pl, r, c, g) in enumerate(zip(plates, rows, cols, genes)):
             vals = [get_normalized_value(pl, r, c, ridx) for ridx in range(self.num_replicates)]
-            vals = [v if np.isfinite(v) else "" for v in vals]
             write_row(rowidx + 1, 0, pl, r, c, g, *vals)
 
         # Write per-replicate median and MAD of all wells, population, negative controls, positive controls
