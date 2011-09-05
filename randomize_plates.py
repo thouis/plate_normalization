@@ -54,11 +54,18 @@ while True:
         idxs = np.nonzero(border & (nc_rows[:, GENE] == g))[0][1:]
         for i in idxs:
             ridx = int(np.random.uniform(0, nc_rows.shape[0]))
-            nc_rows[i, :BOUNDARY], nc_rows[ridx, :BOUNDARY] = nc_rows[ridx, :BOUNDARY], nc_rows[i, :BOUNDARY]
+            temp = nc_rows[ridx, :BOUNDARY].copy()
+            nc_rows[ridx, :BOUNDARY] = nc_rows[i, :BOUNDARY]
+            nc_rows[i, :BOUNDARY] = temp
             totswaps += 1
     print totswaps, "swaps"
     if totswaps == 0:
         break
+
+genecounts = collections.Counter(rows[:, GENE])
+for g in genecounts:
+    if genecounts[g] != 4:
+        print g, genecounts[g]
 
 # write out result
 outbook = xlwt.Workbook(encoding='utf-8')
