@@ -1,16 +1,22 @@
 import MySQLdb
 
-conn = MySQLdb.connect('ptilouis', 'biophenics', 'biophenics', 'biophenics', use_unicode=True)
-cursor = conn.cursor()
-
+conn = None
+cursor = None
 platelist = None
 platedir_to_plateid = {}
+
+def init():
+    global conn, cursor
+    if conn is None:
+        conn = MySQLdb.connect('ptilouis', 'biophenics', 'biophenics', 'biophenics', use_unicode=True)
+        cursor = conn.cursor()
 
 def digits(s):
     return filter(lambda c: c.isdigit(), s)
 
 def get_plateid(platedir):
     global platelist
+    init()
     if platelist is None:
         cursor.execute('SELECT PLATE_ID, PLATE_CODE FROM PLATE WHERE PLATE_CODE IS NOT NULL')
         plate_ids, plate_codes = zip(*cursor.fetchall())
@@ -33,19 +39,21 @@ def get_plateid(platedir):
     return platedir_to_plateid[platedir]
 
 def lookup_genes(platedir, wellrow, wellcol):
+    init()
     cursor.execute('''SELECT DUPLEX_NAME, DUPLEX_NUMBER FROM SI_RNA JOIN SI_RNA_WELL USING (SI_RNA_ID)
                       JOIN WELL USING (WELL_ID) JOIN PLATE USING (PLATE_ID) WHERE PLATE_ID=%d and WELL_ROW=%s and WELL_COL=%s''' %
                    (get_plateid(platedir), wellrow, wellcol))
     return ','.join(['%s#%d' % (g,n) for g, n in cursor.fetchall()])
 
 def lookup_chemicals(platedir, wellrow, wellcol):
+    init()
     cursor.execute('''SELECT CHEMICAL_NAME FROM CHEMICAL JOIN CHEMICAL_WELL USING (CHEMICAL_ID)
                       JOIN WELL USING (WELL_ID) JOIN PLATE USING (PLATE_ID) WHERE PLATE_ID=%d and WELL_ROW=%s and WELL_COL=%s''' %
                    (get_plateid(platedir), wellrow, wellcol))
     return ','.join(['%s' % (c[0]) for c in cursor.fetchall()])
 
 def lookup_treatment(t):
-    print t
+    init()
     if t == 'Genes':
         return lookup_genes
     if t == 'Chemicals':
