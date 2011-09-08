@@ -59,6 +59,14 @@ def inv_logit(lv):
     v = (v - 0.0001) / 0.9998
     return lv
 
+def conservative_nanmedian(arr, ax):
+    def _conservative_nanmedian(arr):
+        # fail if half or more of our inputs are NaN
+        if (2 * np.isnan(arr).sum() >= arr.size):
+            return np.nan
+        return nanmedian(arr)
+    return np.apply_along_axis(_conservative_nanmedian, ax, arr)
+
 def fix_nans(shift_vals):
     # some rows or columns might be entirely controls, in which case
     # we take the normalization from the nearest non-nan rows/columns
@@ -262,7 +270,7 @@ class Normalization(object):
         control_keys = sorted(list(self.gene_to_control_type.keys())) # sorted so DMSO, GL2 before KIF11
         control_groups = [control_keys.index(g) + 1 if g in self.gene_to_control_type else 0
                           for g in self.fetch_genes()]
-        return np.array(control_groups), ['tested'] + control_keys
+        return np.array(control_groups, int), ['tested'] + control_keys
 
     def num_plates(self):
         return len(set(self.get_column_values(self.plate_column)))
@@ -347,8 +355,8 @@ class Normalization(object):
             all_plates = stacker(self.normalization_plate_values.keys())
             controls = (stacker([self.normalization_control_maps[pl] for pl, _ in self.normalization_plate_values.keys()]) != CONTROL_POPULATION)
             all_plates[controls] = np.nan
-            # XXX - if a column is more than half controls, we should probably use adjacent columns to estimate its median
-            offsets = fix_nans(nanmedian(all_plates, axis)).reshape(endshape)
+            # use conservative_nanmedian to avoid taking median of too few values
+            offsets = fix_nans(conservative_nanmedian(all_plates, axis)).reshape(endshape)
             # shift offsets to zero-median to keep things identifiable
             offsets -= np.median(offsets)
             history += offsets
@@ -360,8 +368,8 @@ class Normalization(object):
                 rep_plates = stacker([v for (_, rep), v in self.normalization_plate_values.iteritems() if repindex == rep])
                 controls = (stacker([self.normalization_control_maps[pl] for pl, rep in self.normalization_plate_values.keys() if repindex == rep]) != CONTROL_POPULATION)
                 rep_plates[controls] = np.nan
-                # XXX - if a column is more than half controls, we should probably use adjacent columns to estimate its median
-                offsets[repindex] = fix_nans(nanmedian(rep_plates, axis)).reshape(endshape)
+                # use conservative_nanmedian to avoid taking median of too few values
+                offsets[repindex] = fix_nans(conservative_nanmedian(rep_plates, axis)).reshape(endshape)
                 # shift offsets to zero-median to keep things identifiable
                 offsets[repindex] -= np.median(offsets[repindex])
                 history[repindex] += offsets[repindex]
@@ -408,7 +416,7 @@ class Normalization(object):
         control_groups, self.normalization_control_labels = self.fetch_control_groups()
         control_groups = np.array(control_groups)
         for plate_name in set(plate_names):
-            temp = np.zeros(self.plate_dims(), dtype=object)
+            temp = np.zeros(self.plate_dims(), dtype=int)
             mask = (plate_names == plate_name)
             temp[rows[mask], cols[mask]] = control_groups[mask]
             self.normalization_control_groups[plate_name] = temp
