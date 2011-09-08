@@ -773,6 +773,8 @@ class TransformedPlates(PlatePlot):
 
 class Agreement(Plot):
     def do_draw(self):
+        if self.normalization.num_replicates < 2:
+            return
         self.pre_draw()
         nreps = self.normalization.num_replicates
         npairs = (nreps * (nreps - 1)) / 2
@@ -950,6 +952,22 @@ class CleanedPlates(PlatePlot):
     def post_draw(self, bad_data):
         self.figure.suptitle('cleaned transformed %s' % (' (invalid values discarded)' if bad_data else ''))
 
+class ControlPlatemap(PlatePlot):
+    def do_draw(self):
+        PlatePlot.do_draw(self)
+
+    def pre_draw(self):
+        self.normalization.run_normalization()
+
+    def get_num_replicates(self):
+        return 1
+
+    def get_plate(self, plate_index, rep):
+        return self.normalization.normalization_control_groups[self.normalization.plate_names()[plate_index]]
+
+    def post_draw(self, bad_data):
+        self.figure.suptitle('Controls')
+
 
 class Plots(wx.Panel):
     def __init__(self, parent, normalization):
@@ -978,6 +996,7 @@ class Plots(wx.Panel):
         self.panels['cleaned agreement'] = CleanedAgreement(subpanel, normalization)
         self.panels['cleaned plates'] = CleanedPlates(subpanel, normalization)
         self.panels['cleaned data'] = CleanedTransformedHistograms(subpanel, normalization)
+        self.panels['controls'] = ControlPlatemap(subpanel, normalization)
 
         sizer = self.panel_sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.panels['original data'], 1, wx.ALL | wx.EXPAND, 1)
@@ -994,6 +1013,7 @@ class Plots(wx.Panel):
         sizer.Add(self.panels['cleaned agreement'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned plates'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned data'], 1, wx.ALL | wx.EXPAND, 1)
+        sizer.Add(self.panels['controls'], 1, wx.ALL | wx.EXPAND, 1)
         subpanel.SetSizer(sizer)
 
         self.scroll_window.SetupScrolling(True, False)
