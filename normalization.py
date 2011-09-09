@@ -250,6 +250,11 @@ class Normalization(object):
             vals = self.transform_data(vals)
         return vals
 
+    def get_orig_values(self, repindex):
+        return np.hstack([self.normalization_orig_values[pl, rep]
+                          for pl, rep in sorted(self.normalization_orig_values.keys())
+                          if rep == repindex]).flatten()
+
     def get_transformed_values(self, repindex, cleaned=False):
         if not cleaned:
             vals = np.hstack([self.transformed_initial_plate_values[pl, rep]
@@ -390,18 +395,25 @@ class Normalization(object):
         self.normalization_plate_values = {}
         self.normalization_control_maps = {}
         self.normalization_control_groups = {}
+        self.normalization_orig_values = {}
         rows = np.array([ord(r) - ord('A') for r in self.fetch_rows()])
         cols = np.array([int(c) - 1 for c in self.fetch_cols()])
 
         plate_names = np.array([v for v in self.get_column_values(self.plate_column)], dtype=object)
         for repindex in range(self.num_replicates):
             vals = np.array(self.get_replicate_data(repindex, True))
+            orig_vals = np.array(self.get_replicate_data(repindex, False))
             for plate_name in set(plate_names):
                 # fetch transformed values
                 temp = np.zeros(self.plate_dims(), dtype=np.float)
                 mask = (plate_names == plate_name)
                 temp[rows[mask], cols[mask]] = vals[mask]
                 self.normalization_plate_values[plate_name, repindex] = temp
+                # fetch original values
+                temp = np.zeros(self.plate_dims(), dtype=np.float)
+                mask = (plate_names == plate_name)
+                temp[rows[mask], cols[mask]] = orig_vals[mask]
+                self.normalization_orig_values[plate_name, repindex] = temp
 
         # snapshot initial transformed state
         self.transformed_initial_plate_values = self.normalization_plate_values

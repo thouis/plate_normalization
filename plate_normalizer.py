@@ -718,7 +718,7 @@ class Histograms(Plot):
         for rep in range(self.normalization.num_replicates):
             subplot = self.figure.add_subplot(self.normalization.num_replicates, 1, rep + 1)
             if self.original:
-                data = self.normalization.get_replicate_data(rep)
+                data = self.normalization.get_orig_values(rep)
             else:
                 data = self.normalization.get_transformed_values(rep, cleaned=self.cleaned)
             good_mask = np.isfinite(data)
