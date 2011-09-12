@@ -194,7 +194,8 @@ class MyFrame(wx.Frame):
                 if not kont:
                     raise StopProcessing
             try:
-                xmls_to_xls(self.parent_dir.dirname.Value, xmlfiles, outfile, callback, lookup_treatment(self.extract_from_DB.StringSelection))
+                xmls_to_xls(self.parent_dir.dirname.Value, xmlfiles, outfile, callback,
+                            lookup_treatment(self.extract_from_DB.StringSelection) if self.extract_from_DB.Value else None)
             except StopProcessing:
                 pass
             progress.Destroy()
