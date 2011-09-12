@@ -123,7 +123,6 @@ class MyFrame(wx.Frame):
         bigbox = wx.BoxSizer(wx.VERTICAL)
         bigbox.Add(box, 1, wx.EXPAND | wx.ALL, 5)
 
-        self.extract_from_DB.Value = False
         go_button.Bind(wx.EVT_BUTTON, self.process_xml)
 
         self.SetSizer(bigbox)
@@ -195,7 +194,7 @@ class MyFrame(wx.Frame):
                     raise StopProcessing
             try:
                 xmls_to_xls(self.parent_dir.dirname.Value, xmlfiles, outfile, callback,
-                            lookup_treatment(self.extract_from_DB.StringSelection) if self.extract_from_DB.Value else None)
+                            lookup_treatment(self.extract_from_DB.StringSelection) if (self.extract_from_DB.GetStringSelection() != "No" else None)
             except StopProcessing:
                 pass
             progress.Destroy()
