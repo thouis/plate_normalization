@@ -34,16 +34,25 @@ def get_plateid(platedir):
             if barcode in pc:
                 platedir_to_plateid[platedir] = pid
                 break
+        # XXX - check if barcode in more than one entry.
         if platedir not in platedir_to_plateid:
             raise ValueError('Could not find plate from directory name %s' % (platedir))
     return platedir_to_plateid[platedir]
 
-def lookup_genes(platedir, wellrow, wellcol):
+def lookup_genes(platedir, wellrow, wellcol, target_sequence=False):
     init()
-    cursor.execute('''SELECT DUPLEX_NAME, DUPLEX_NUMBER FROM SI_RNA JOIN SI_RNA_WELL USING (SI_RNA_ID)
+    if not target_sequence:
+        cursor.execute('''SELECT DUPLEX_NAME, DUPLEX_NUMBER FROM SI_RNA JOIN SI_RNA_WELL USING (SI_RNA_ID)
                       JOIN WELL USING (WELL_ID) JOIN PLATE USING (PLATE_ID) WHERE PLATE_ID=%d and WELL_ROW=%s and WELL_COL=%s''' %
-                   (get_plateid(platedir), wellrow, wellcol))
-    return ','.join(['%s#%d' % (g,n) for g, n in cursor.fetchall()])
+                       (get_plateid(platedir), wellrow, wellcol))
+        
+        return ','.join(['%s#%d' % (g, n) for g, n in cursor.fetchall()])
+    else:
+        cursor.execute('''SELECT DUPLEX_NAME, DUPLEX_NUMBER, TARGET_SEQUENCE FROM SI_RNA JOIN SI_RNA_WELL USING (SI_RNA_ID)
+                      JOIN WELL USING (WELL_ID) JOIN PLATE USING (PLATE_ID) WHERE PLATE_ID=%d and WELL_ROW=%s and WELL_COL=%s''' %
+                       (get_plateid(platedir), wellrow, wellcol))
+        return ','.join([('%s#%d' % (g, n), ts) for g, n, ts in cursor.fetchall()])
+
 
 def lookup_chemicals(platedir, wellrow, wellcol):
     init()
@@ -64,4 +73,4 @@ def lookup_treatment(t):
 if __name__ == '__main__':
     print lookup_genes('384_20X_Dapi_Alexa_cy3_2010-0445_1', 1, 1)
     print lookup_chemicals('384_20X_Dapi_Alexa_cy3_2010-0445_1', 1, 1)
-    print get_plateid('384_20X_Dapi_Alexa_cy3_2010-0445_1')
+    print get_plateid('384_10X_Dapi_Alexa_20100331_1')

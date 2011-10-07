@@ -484,7 +484,6 @@ class Normalization(object):
                 if v > 0:
                     return '+inf'
                 return '-inf'
-                return 
             except:
                 return ""
 
