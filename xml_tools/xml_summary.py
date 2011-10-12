@@ -284,6 +284,7 @@ def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment):
             lookup_feature_col('Well')
             if lookup_well_treatment is not None:
                 lookup_feature_col('Treatment')
+                lookup_feature_col('Target Sequence')
             rowvals['Plate'] = parse_plate(platedir)
             # prefer well row/column, but use name if they are not valid
             if int(wellrow) > 0 and int(wellcol) > 0:
@@ -291,7 +292,13 @@ def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment):
             else:
                 rowvals['Well'] = wellname
             if lookup_well_treatment is not None:
-                rowvals['Treatment'] = lookup_well_treatment(platedir, wellrow, wellcol)
+                treatment = lookup_well_treatment(platedir, wellrow, wellcol, target_sequence=True)
+                # did we get a target sequence?
+                if isinstance(treatment, tuple):
+                    rowvals['Treatment'] = treatment[0]
+                    rowvals['Target Sequence'] = treatment[1]
+                else:
+                    rowvals['Treatment'] = treatment
 
         def end_well():
             colvals = sorted([(lookup_feature_col(feature), rowvals.get(feature, '')) for feature in feature_to_col])

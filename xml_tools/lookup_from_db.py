@@ -51,15 +51,20 @@ def lookup_genes(platedir, wellrow, wellcol, target_sequence=False):
         cursor.execute('''SELECT DUPLEX_NAME, DUPLEX_NUMBER, TARGET_SEQUENCE FROM SI_RNA JOIN SI_RNA_WELL USING (SI_RNA_ID)
                       JOIN WELL USING (WELL_ID) JOIN PLATE USING (PLATE_ID) WHERE PLATE_ID=%d and WELL_ROW=%s and WELL_COL=%s''' %
                        (get_plateid(platedir), wellrow, wellcol))
-        return ','.join([('%s#%d' % (g, n), ts) for g, n, ts in cursor.fetchall()])
+        vals = cursor.fetchall()
+        return ','.join([('%s#%d' % (g, n)) for g, n, ts in vals]), ','.join([ts for g, n, ts in vals])
 
 
-def lookup_chemicals(platedir, wellrow, wellcol):
+def lookup_chemicals(platedir, wellrow, wellcol, target_sequence=False):
     init()
     cursor.execute('''SELECT CHEMICAL_NAME FROM CHEMICAL JOIN CHEMICAL_WELL USING (CHEMICAL_ID)
                       JOIN WELL USING (WELL_ID) JOIN PLATE USING (PLATE_ID) WHERE PLATE_ID=%d and WELL_ROW=%s and WELL_COL=%s''' %
                    (get_plateid(platedir), wellrow, wellcol))
-    return ','.join(['%s' % (c[0]) for c in cursor.fetchall()])
+    if target_sequence:
+        return ','.join(['%s' % (c[0]) for c in cursor.fetchall()]), None
+    else:
+        return ','.join(['%s' % (c[0]) for c in cursor.fetchall()])
+
 
 def lookup_treatment(t):
     init()
