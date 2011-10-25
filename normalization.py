@@ -87,6 +87,7 @@ class Normalization(object):
     def __init__(self):
         self.input_file = ''
         self.output_file = ''
+        self.bfx_format = False  # second line of input is feature ID.
         self.shape = DETECT
         self.detected_384 = False
         self.plate_column = ()
@@ -129,6 +130,11 @@ class Normalization(object):
     def set_output_file(self, val):
         self.output_file = val
 
+    def set_bfx_format(self, val):
+        if self.bfx_format != val:
+            self.bfx_format = val
+            self.update_file_listeners()
+
     def update_file_listeners(self):
         for f in self.file_listeners:
             f()
@@ -148,13 +154,18 @@ class Normalization(object):
             f()
 
     def get_column_values(self, column_specifier):
+        skip = 2 if self.bfx_format else 1
         if self.book != self.cached_book:
             self.cached_values = {}
             self.cached_replicate_data = {}
             self.cached_book = self.book
         if column_specifier not in self.cached_values:
-            self.cached_values[column_specifier] = [cell.value for cell in self.book.sheet_by_index(column_specifier[0]).col(column_specifier[1])[1:]]
-        return self.cached_values[column_specifier]
+            self.cached_values[(column_specifier, skip)] = [cell.value for cell in self.book.sheet_by_index(column_specifier[0]).col(column_specifier[1])[skip:]]
+        return self.cached_values[(column_specifier, skip)]
+
+    def get_row_values(self, row_specifier):
+        # seldom used, not cached
+        return [cell.value for cell in self.book.sheet_by_index(row_specifier[0]).row(row_specifier[1])]
 
     def fetch_plates(self):
         return self.get_column_values(self.plate_column)

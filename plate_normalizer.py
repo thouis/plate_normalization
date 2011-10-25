@@ -4,6 +4,7 @@ import wx, wx.html, wx.lib.scrolledpanel
 import sys
 import random
 import os.path
+import re
 from normalization import Normalization, DETECT, TRANSFORMATIONS, ALIGN_WHEN, ALIGNMENT_METHODS, ALIGN_NEVER, CONTROL_POPULATION, CONTROL_NEGATIVE, CONTROL_POSITIVE
 from wrapfilename import wrap_filename
 import wxplotpanel
@@ -121,10 +122,15 @@ class PlateLayout(wx.Panel):
 
         input_box = wx.StaticBox(self, wx.ID_ANY, 'Input')
         input_sizer = wx.StaticBoxSizer(input_box, wx.VERTICAL)
+        lower_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.input_text = wx.TextCtrl(self, -1, normalization.input_file, style=wx.TE_RIGHT)
+        self.bfx_format = wx.CheckBox(self, label='BFX format?')
         input_browse = wx.Button(self, label="Browse")
-        input_sizer.Add(self.input_text, 0, wx.EXPAND)
-        input_sizer.Add(input_browse, 0, wx.ALIGN_RIGHT | wx.TOP, 5)
+        lower_sizer.Add(self.bfx_format)
+        lower_sizer.AddStretchSpacer()
+        lower_sizer.Add(input_browse)
+        input_sizer.Add(self.input_text, flag=wx.EXPAND)
+        input_sizer.Add(lower_sizer, flag=wx.EXPAND | wx.TOP, border=5)
 
         shape_box = wx.StaticBox(self, wx.ID_ANY, 'Plate shape')
         shape_sizer = wx.StaticBoxSizer(shape_box, wx.HORIZONTAL)
@@ -160,7 +166,7 @@ class PlateLayout(wx.Panel):
 
         gene_column_box = wx.StaticBox(self, wx.ID_ANY, 'Gene/Chemical column in spreadsheet')
         gene_column_sizer = wx.StaticBoxSizer(gene_column_box, wx.VERTICAL)
-        self.gene_column_selector = ColumnSelector(self, self.set_gene_column, ['gene', 'compound', 'treatment'], 
+        self.gene_column_selector = ColumnSelector(self, self.set_gene_column, ['gene', 'compound', 'treatment', 'content'],
                                                    self.normalization)
         gene_column_sizer.Add(self.gene_column_selector, 0, wx.EXPAND)
 
@@ -178,6 +184,7 @@ class PlateLayout(wx.Panel):
         self.well_column_sizer.Hide(self.wellcol_selector)
 
         input_browse.Bind(wx.EVT_BUTTON, self.browse_input)
+        self.bfx_format.Bind(wx.EVT_CHECKBOX, self.set_bfx_format)
         shapeb1.Bind(wx.EVT_RADIOBUTTON, self.set_shape)
         shapeb2.Bind(wx.EVT_RADIOBUTTON, self.set_shape)
         shapeb3.Bind(wx.EVT_RADIOBUTTON, self.set_shape)
@@ -194,18 +201,14 @@ class PlateLayout(wx.Panel):
         sizer.Add(status_sizer, 0, wx.ALL | wx.EXPAND, 5)
         self.SetSizer(sizer)
 
+        self.normalization.file_listeners.append(self.set_file)
+
     # XXX - handle text field editing
     def browse_input(self, evt):
         dlg = wx.FileDialog(self, "Choose an input file (.XLS)", wildcard="*.xls", style=wx.OPEN)
         if dlg.ShowModal() == wx.ID_OK:
             self.normalization.set_input_file(dlg.GetPath())
-            self.update_files()
         dlg.Destroy()
-
-    def update_files(self):
-        # should check existence, possibly pre-parse
-        self.input_text.Value = self.normalization.input_file
-        self.TopLevelParent.update_title()
 
     def set_shape(self, evt):
         self.normalization.shape = evt.EventObject.Label
@@ -248,10 +251,25 @@ class PlateLayout(wx.Panel):
         self.normalization.gene_column = val
         self.preflight()
 
+    def set_file(self):
+        # should check existence, possibly pre-parse
+        self.input_text.Value = self.normalization.input_file
+        self.TopLevelParent.update_title()
+        bfx_row = self.normalization.get_row_values((0, 1))
+        pat = re.compile('[0-9]*')
+        self.bfx_format.Value = all(pat.match(s) for s in bfx_row)
+        self.normalization.set_bfx_format(self.bfx_format.Value)
+        self.Refresh()
+
+    def set_bfx_format(self, evt):
+        self.normalization.set_bfx_format(self.bfx_format.Value)
+
     def preflight(self):
         # Attempt to parse the data, report what we find
         self.valid = False
         try:
+            # guess if we are BFX format
+
             # fetch (plate, row, col, gene) for every entry in the XLS
             # given the columns we have.
             current_data = zip(self.normalization.fetch_plates(),
@@ -303,7 +321,7 @@ class PlateLayout(wx.Panel):
             # report top 10 genes by count
             countgenes = sorted([(c, g) for g, c in gene_counts.iteritems()])[-10:][::-1]
             gene_counts_text = "\n".join(["Number of wells per gene, top 10:"] +
-                                         ["%12s : %d" % (g, c) for (c, g) in countgenes])
+                                         ["%12s : %d" % (g.replace('\n', ' - '), c) for (c, g) in countgenes])
 
             status = "\n".join(["Plate Type: %s%s" % (plate_shape, autodetected),
                                 "Number of plates: %d" % (len(wells_per_plate)),
@@ -320,8 +338,6 @@ class PlateLayout(wx.Panel):
             self.status_text.Label = "Parsing error:\n" + e.message
             self.valid = False
         except Exception, e:
-            import traceback
-            traceback.print_exc()
             self.status_text.Label = "Choose settings above..."
             self.valid = False
 
