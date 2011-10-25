@@ -531,45 +531,40 @@ class Normalization(object):
             vals = allvals[ridx][all_control_maps == CONTROL_POPULATION]
             meds.append(np.median(vals))
             sigma_MADs.append(1.4826 * np.median(np.abs(vals - meds[-1])))
-        write_summary("Median Population", *meds)
-        write_summary("sigma_MAD Population", *sigma_MADs)
+        write_summary("Median Tested Population", *meds)
+        write_summary("sigma_MAD Tested Population", *sigma_MADs)
 
-        # negative controls
-        write_summary("")
-        meds = []
-        sigma_MADs = []
-        for ridx in range(self.num_replicates):
-            vals = allvals[ridx][all_control_maps == CONTROL_NEGATIVE]
-            meds.append(np.median(vals))
-            sigma_MADs.append(1.4826 * np.median(np.abs(vals - meds[-1])))
-        write_summary("Median Neg. Controls", *meds)
-        write_summary("sigma_MAD Neg. Controls", *sigma_MADs)
-
-        # positive controls
-        write_summary("")
-        meds = []
-        sigma_MADs = []
-        for ridx in range(self.num_replicates):
-            vals = allvals[ridx][all_control_maps == CONTROL_POSITIVE]
-            meds.append(np.median(vals))
-            sigma_MADs.append(1.4826 * np.median(np.abs(vals - meds[-1])))
-        write_summary("Median Pos. Controls", *meds)
-        write_summary("sigma_MAD Pos. Controls", *sigma_MADs)
+        # XXX - need to write controls indepently
 
         # Provenance sheet
         nrows = len(provenance_sheet.rows)
         features = [self.replicate_features[repidx] for repidx in range(self.num_replicates)]
         feature_names = [(self.book.sheet_names()[f[0]], self.book.sheet_by_index(f[0]).row(0)[f[1]].value) for f in features]
-        provenance = ([["Normalization", results_sheet.name, datetime.date.today().isoformat(), getpass.getuser()],
-                       ["Original file", os.path.abspath(self.input_file)],
-                       ["Features"]] +
-                      [["", "Sheet:", f[0], "Column:", f[1]] for f in feature_names] +
-                      [["Number of iterations:", self.num_iterations],
-                       ["Transformation:", self.transformation],
-                       ["When to align?", self.align_when],
-                       ["How to align?", self.alignment_method],
-                       ["Control(s):"]] +
-                      [["", g, t] for g, t in self.gene_to_control_type.iteritems() if t != CONTROL_POPULATION])
+        if not self.bfx_format:
+            provenance = ([["Normalization", results_sheet.name, datetime.date.today().isoformat(), getpass.getuser()],
+                           ["Original file", os.path.abspath(self.input_file)],
+                           ["Features"]] +
+                          [["", "Sheet:", f[0], "Column:", f[1]] for f in feature_names] +
+                          [["Number of iterations:", self.num_iterations],
+                           ["Transformation:", self.transformation],
+                           ["When to align?", self.align_when],
+                           ["How to align?", self.alignment_method],
+                           ["Control(s):"]] +
+                          [["", g, t] for g, t in self.gene_to_control_type.iteritems() if t != CONTROL_POPULATION])
+        else:
+            # XXX - check ids are the same
+            features_id = [self.book.sheet_by_index(f[0]).row(1)[f[1]].value for f in features]
+            provenance = ([["Normalization - %s" % (feature_names[0][1]), datetime.date.today().isoformat(), getpass.getuser()],
+                           [""],
+                           ["type", "Normalization"],
+                           ["name", results_sheet.name],
+                           ["measures", ";".join(features_id)],
+                           ["Number of iterations:", self.num_iterations],
+                           ["Transformation:", self.transformation],
+                           ["When to align?", self.align_when],
+                           ["How to align?", self.alignment_method]] +
+                          [["Control", g] for g, t in self.gene_to_control_type.iteritems() if t != CONTROL_POPULATION])
+
 
         for idx, l in enumerate(provenance):
             for c, v in enumerate(l):
@@ -593,7 +588,7 @@ def duplicate_xlbook(book):
     # last, in which case, just before it.
     normalization_sheet_last = (existing_sheets[-1] != provenance_sheet_name)
 
-    from xlutils.filter import process,XLRDReader,XLWTWriter
+    from xlutils.filter import process, XLRDReader, XLWTWriter
     import xlwt
 
     class WrapWT(XLWTWriter):
