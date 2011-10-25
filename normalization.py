@@ -25,19 +25,15 @@ ALIGN_WHEN = [ALIGN_NEVER,
               ALIGN_ONCE,
               ALIGN_EACH]
 
-ALIGN_NEGATIVE_CONTROLS = "Negative Controls"
 ALIGN_POPULATION = "All But Controls"
 ALIGN_EVERYTHING = "All Wells"
-ALIGNMENT_METHODS = [ALIGN_NEGATIVE_CONTROLS,
-                     ALIGN_POPULATION,
+ALIGNMENT_METHODS = [ALIGN_POPULATION,
                      ALIGN_EVERYTHING]
 
 CONTROL_POPULATION = "Tested Population"
-CONTROL_NEGATIVE = "Negative Control"
-CONTROL_POSITIVE = "Positive Control"
+CONTROL_CONTROL = "Control"
 CONTROL_TYPES = [CONTROL_POPULATION,
-                 CONTROL_NEGATIVE,
-                 CONTROL_POSITIVE]
+                 CONTROL_CONTROL]
 
 def safe_float(s):
     try:
@@ -133,7 +129,6 @@ class Normalization(object):
     def set_bfx_format(self, val):
         if self.bfx_format != val:
             self.bfx_format = val
-            self.update_file_listeners()
 
     def update_file_listeners(self):
         for f in self.file_listeners:
@@ -324,9 +319,7 @@ class Normalization(object):
         offsets = {}
         for (plate, repindex), values in self.normalization_plate_values.iteritems():
             control_map = self.normalization_control_maps[plate]
-            if self.alignment_method == ALIGN_NEGATIVE_CONTROLS:
-                align_values = values[control_map == CONTROL_NEGATIVE]
-            elif self.alignment_method == ALIGN_POPULATION:
+            if self.alignment_method == ALIGN_POPULATION:
                 align_values = values[control_map == CONTROL_POPULATION]
             elif self.alignment_method == ALIGN_EVERYTHING:
                 align_values = values

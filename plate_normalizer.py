@@ -5,11 +5,12 @@ import sys
 import random
 import os.path
 import re
-from normalization import Normalization, DETECT, TRANSFORMATIONS, ALIGN_WHEN, ALIGNMENT_METHODS, ALIGN_NEVER, CONTROL_POPULATION, CONTROL_NEGATIVE, CONTROL_POSITIVE
+from normalization import Normalization, DETECT, TRANSFORMATIONS, ALIGN_WHEN, ALIGNMENT_METHODS, ALIGN_NEVER, CONTROL_POPULATION, CONTROL_CONTROL
 from wrapfilename import wrap_filename
 import wxplotpanel
 import traceback
 import numpy as np
+from errordialog import display_error_dialog
 try:
     from collections import OrderedDict
 except:
@@ -338,7 +339,7 @@ class PlateLayout(wx.Panel):
             self.status_text.Label = "Parsing error:\n" + e.message
             self.valid = False
         except Exception, e:
-            self.status_text.Label = "Choose settings above..."
+            self.status_text.Label = "Choose settings above...\n" + str(e)
             self.valid = False
 
 class Controls(wx.Panel):
@@ -381,15 +382,14 @@ class Controls(wx.Panel):
         self.row_controls = []
         self.row_sizer.DeleteWindows()
 
-        def make_row(panel, g, c, t, n, p):
-            self.row_controls.append([g, c, t, n, p])
+        def make_row(panel, g, c, tested, control):
+            self.row_controls.append([g, c, tested, control])
             g.Wrap(150)
             sizer = wx.BoxSizer(wx.HORIZONTAL)
             sizer.Add(g, 1, wx.ALIGN_CENTER)
             sizer.Add(c, 1, wx.ALIGN_CENTER)
-            sizer.Add(t, 1, wx.ALIGN_CENTER)
-            sizer.Add(n, 1, wx.ALIGN_CENTER)
-            sizer.Add(p, 1, wx.ALIGN_CENTER)
+            sizer.Add(tested, 1, wx.ALIGN_CENTER)
+            sizer.Add(control, 1, wx.ALIGN_CENTER)
             panel.SetSizer(sizer)
             return panel
 
@@ -408,25 +408,23 @@ class Controls(wx.Panel):
                                     wx.StaticText(panel, -1, "Name"),
                                     wx.StaticText(panel, -1, "Count"),
                                     wx.StaticText(panel, -1, "Tested Population"),
-                                    wx.StaticText(panel, -1, "Negative Control"),
-                                    wx.StaticText(panel, -1, "Positive Control")),
+                                    wx.StaticText(panel, -1, "Control")),
                            0, wx.EXPAND)
 
         for idx, (count, gene) in enumerate(countgenes):
             panel = wx.Panel(self.scroll_window, -1)
             # panel.BackgroundColour = "white" if (idx % 5) else "light grey"
             self.row_sizer.Add(make_row(panel,
-                                        wx.StaticText(panel, -1, gene),
+                                        wx.StaticText(panel, -1, gene.strip().replace('\n', ' - ')),
                                         wx.StaticText(panel, -1, "%d" % (count)),
                                         Controls.GeneControlButton(CONTROL_POPULATION, gene, panel, -1, style=wx.RB_GROUP),
-                                        Controls.GeneControlButton(CONTROL_NEGATIVE, gene, panel, -1),
-                                        Controls.GeneControlButton(CONTROL_POSITIVE, gene, panel, -1)),
+                                        Controls.GeneControlButton(CONTROL_CONTROL, gene, panel, -1)),
                                0, wx.EXPAND)
             if idx % 5 == 4:
                 self.row_sizer.Add(wx.StaticLine(self.scroll_window), 0, wx.EXPAND | wx.ALL, 1)
 
-        for g, c, t, n, p in self.row_controls[1:]:
-            t.Value = True
+        for g, c, tested, control in self.row_controls[1:]:
+            tested.Value = True
 
         self.scroll_window.Thaw()
         self.row_sizer.Layout()
@@ -1135,6 +1133,8 @@ class Frame(wx.Frame):
                 title += ' -> %s' % (os.path.basename(self.normalization.output_file))
         self.Title = title
 
+
+
 def main():
     normalization = Normalization()
     app = wx.App(redirect=False)
@@ -1143,6 +1143,18 @@ def main():
     top.Show()
     if len(sys.argv) > 1:
         normalization.set_input_file(sys.argv[1])
+
+    def show_errordialog(type, exc, tb):
+        def doit():
+            display_error_dialog(top, exc, None, tb=tb, continue_only=True,
+                                 message="Exception in processing")
+        # continue is really the only choice
+        wx.CallAfter(doit)
+    # replace default hook with error dialog
+    orig_excepthook = sys.excepthook
+    sys.excepthook = show_errordialog
+
+
     app.MainLoop()
 
 if __name__ == "__main__":
