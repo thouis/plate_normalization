@@ -4,14 +4,16 @@ import xml.parsers.expat
 print_all = 0
 depth = 0
 
+do_print = False
+
 def start_element(name, attrs):
-    print name, attrs
+    global do_print
+    if name == 'Filters':
+        do_print = True
+    if do_print:
+        print name, attrs
 
 def end_element(name):
-    return
-    global print_all, depth
-    if print_all:
-        depth -= 1
     if name == 'Filters':
         raise ValueError('foo')
 
