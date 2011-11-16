@@ -258,7 +258,7 @@ class PlateLayout(wx.Panel):
         self.TopLevelParent.update_title()
         bfx_row = self.normalization.get_row_values((0, 1))
         pat = re.compile('[0-9]*')
-        self.bfx_format.Value = all(pat.match(s) for s in bfx_row)
+        self.bfx_format.Value = all(pat.match(unicode(s)) for s in bfx_row)
         self.normalization.set_bfx_format(self.bfx_format.Value)
         self.Refresh()
 
