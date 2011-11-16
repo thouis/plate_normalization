@@ -492,10 +492,20 @@ class Normalization(object):
                 return ""
 
         # XXX - should write Well = Row+Column
-        write_row(0, 0, "Plate", "Row", "Column", "Gene", *["rep%d"%(r + 1) for r in range(self.num_replicates)])
+        features = [self.replicate_features[repidx] for repidx in range(self.num_replicates)]
+        orig_feature_names = [self.book.sheet_by_index(f[0]).row(0)[f[1]].value for f in features]
+        write_row(0, 0, "Plate", "Row", "Column", "Gene", *orig_feature_names)
+        offset = 1
+        if self.bfx_format:
+            import uuid
+            orig_feature_ids = [self.book.sheet_by_index(f[0]).row(1)[f[1]].value for f in features]
+            new_feature_ids = dict([(orig_feature_id, str(uuid.uuid4().int)) for orig_feature_id in orig_feature_ids])
+            new_feature_ids = [new_feature_ids[orig_feature_id] for orig_feature_id in orig_feature_ids]
+            write_row(1, 0, "", "", "", "", *new_feature_ids)
+            offset = 2
         for rowidx, (pl, r, c, g) in enumerate(zip(plates, rows, cols, genes)):
             vals = [get_normalized_value(pl, r, c, ridx) for ridx in range(self.num_replicates)]
-            write_row(rowidx + 1, 0, pl, r, c, g, *vals)
+            write_row(rowidx + offset, 0, pl, r, c, g, *vals)
 
         # Write per-replicate median and MAD of all wells, population, negative controls, positive controls
         dest_column = len(vals) + 4 + 2 
@@ -538,7 +548,6 @@ class Normalization(object):
 
         # Provenance sheet
         nrows = len(provenance_sheet.rows)
-        features = [self.replicate_features[repidx] for repidx in range(self.num_replicates)]
         feature_names = [(self.book.sheet_names()[f[0]], self.book.sheet_by_index(f[0]).row(0)[f[1]].value) for f in features]
         if not self.bfx_format:
             provenance = ([["Normalization", results_sheet.name, datetime.date.today().isoformat(), getpass.getuser()],
@@ -553,12 +562,13 @@ class Normalization(object):
                           [["", g, t] for g, t in self.gene_to_control_type.iteritems() if t != CONTROL_POPULATION])
         else:
             # XXX - check ids are the same
-            features_id = [self.book.sheet_by_index(f[0]).row(1)[f[1]].value for f in features]
+            parent_features_id = [self.book.sheet_by_index(f[0]).row(1)[f[1]].value for f in features]
             provenance = ([["Normalization - %s" % (feature_names[0][1]), datetime.date.today().isoformat(), getpass.getuser()],
                            [""],
                            ["type", "Normalization"],
                            ["name", results_sheet.name],
-                           ["measures", ";".join(features_id)],
+                           ["parent_measures", ";".join(orig_feature_ids)],
+                           ["measures", ";".join(new_feature_ids)],
                            ["Number of iterations:", self.num_iterations],
                            ["Transformation:", self.transformation],
                            ["When to align?", self.align_when],
