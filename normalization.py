@@ -498,7 +498,7 @@ class Normalization(object):
         offset = 1
         if self.bfx_format:
             import uuid
-            orig_feature_ids = [self.book.sheet_by_index(f[0]).row(1)[f[1]].value for f in features]
+            orig_feature_ids = [str(self.book.sheet_by_index(f[0]).row(1)[f[1]].value) for f in features]
             new_feature_ids = dict([(orig_feature_id, str(uuid.uuid4().int)) for orig_feature_id in orig_feature_ids])
             new_feature_ids = [new_feature_ids[orig_feature_id] for orig_feature_id in orig_feature_ids]
             write_row(1, 0, "", "", "", "", *new_feature_ids)
