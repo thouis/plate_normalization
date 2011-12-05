@@ -879,6 +879,37 @@ class AlignedPlates(PlatePlot):
     def post_draw(self, bad_data):
         self.figure.suptitle('transformed and aligned%s' % (' (invalid values discarded)' if bad_data else ''))
 
+class ZScorePlates(PlatePlot):
+    def __init__(self, *args, **kwargs):
+        self.before_normalization = kwargs.pop('before_normalization', False)
+        PlatePlot.__init__(self, *args, **kwargs)
+
+    def do_draw(self):
+        PlatePlot.do_draw(self)
+
+    def pre_draw(self):
+        self.normalization.run_normalization()
+        # compute median of non-controls
+
+    def get_plate(self, plate_index, rep):
+        plate_name = self.normalization.plate_names()[plate_index]
+        if self.before_normalization:
+            return np.clip(((self.normalization.normalization_first_alignment[plate_name, rep] -
+                             self.normalization.first_alignment_medians[rep]) /
+                            self.normalization.first_alignment_MAD_sigmas[rep]),
+                           -4, 4)
+        else:
+            return np.clip(((self.normalization.normalization_plate_values[plate_name, rep] -
+                             self.normalization.normalization_medians[rep]) /
+                            self.normalization.normalization_MAD_sigmas[rep]),
+                           -4, 4)
+
+    def post_draw(self, bad_data):
+        if self.before_normalization:
+            self.figure.suptitle('transformed & aligned robust Z-scores\n(clamped at -/+ 4)%s' % (' (invalid values discarded)' if bad_data else ''))
+        else:
+            self.figure.suptitle('cleaned robust Z-scores\n(clamped at -/+ 4)%s' % (' (invalid values discarded)' if bad_data else ''))
+
 class MergedPlates(PlatePlot):
     def __init__(self, when, *args, **kwargs):
         assert when in ['before', 'after']
@@ -1002,6 +1033,7 @@ class Plots(wx.Panel):
         self.panels['transformed platemaps'] = TransformedPlates(subpanel, normalization)
         self.panels['transformed agreement'] = TransformedAgreement(subpanel, normalization)
         self.panels['aligned platemaps'] = AlignedPlates(subpanel, normalization)
+        self.panels['aligned zscore platemaps'] = ZScorePlates(subpanel, normalization, before_normalization=True)
         self.panels['merged before'] = MergedPlates('before', subpanel, normalization)
         self.panels['merged before inrep'] = MergedInReplicatesPlates('before', subpanel, normalization)
         self.panels['merged after inrep'] = MergedInReplicatesPlates('after', subpanel, normalization)
@@ -1010,6 +1042,7 @@ class Plots(wx.Panel):
         self.panels['cleaned agreement'] = CleanedAgreement(subpanel, normalization)
         self.panels['cleaned plates'] = CleanedPlates(subpanel, normalization)
         self.panels['cleaned data'] = CleanedTransformedHistograms(subpanel, normalization)
+        self.panels['cleaned zscore'] = ZScorePlates(subpanel, normalization, before_normalization=False)
         self.panels['controls'] = ControlPlatemap(subpanel, normalization)
 
         sizer = self.panel_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -1019,6 +1052,7 @@ class Plots(wx.Panel):
         sizer.Add(self.panels['transformed platemaps'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['transformed agreement'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['aligned platemaps'], 1, wx.ALL | wx.EXPAND, 1, )
+        sizer.Add(self.panels['aligned zscore platemaps'], 1, wx.ALL | wx.EXPAND, 1, )
         sizer.Add(self.panels['merged before'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged before inrep'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['merged after inrep'], 1, wx.ALL | wx.EXPAND, 1)
@@ -1027,6 +1061,7 @@ class Plots(wx.Panel):
         sizer.Add(self.panels['cleaned agreement'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned plates'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['cleaned data'], 1, wx.ALL | wx.EXPAND, 1)
+        sizer.Add(self.panels['cleaned zscore'], 1, wx.ALL | wx.EXPAND, 1)
         sizer.Add(self.panels['controls'], 1, wx.ALL | wx.EXPAND, 1)
         subpanel.SetSizer(sizer)
 

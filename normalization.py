@@ -391,6 +391,19 @@ class Normalization(object):
     def normalization_shift_columns(self):
         return self.normalization_shift_rows_or_cols(0, np.vstack, self.normalization_total_col_shifts)
 
+    def compute_medians_MAD_sigmas(self):
+        meds, MAD_sigmas = {}, {}
+        for repindex in range(self.num_replicates):
+            rep_plates = np.dstack([v for (_, rep), v in self.normalization_plate_values.iteritems() if repindex == rep])
+            tested_pop = np.dstack([self.normalization_control_maps[pl] for pl, rep in self.normalization_plate_values.keys() if repindex == rep]) == CONTROL_POPULATION
+            try:
+                vals = rep_plates[tested_pop].flatten()
+                meds[repindex] = np.median(vals)
+                MAD_sigmas[repindex] = np.median(np.abs(vals - meds[repindex])) * 1.4826
+            except:
+                meds[repindex], MAD_sigmas[repindex] = 0.0, 0.0
+        return meds, MAD_sigmas
+
     def run_normalization(self):
         if not self.ready():
             return
@@ -437,7 +450,6 @@ class Normalization(object):
             temp[rows[mask], cols[mask]] = control_groups[mask]
             self.normalization_control_groups[plate_name] = temp
 
-
         # total shifts
         self.normalization_total_plate_shifts = dict(((pl, repindex), 0.0) for (pl, repindex) in self.normalization_plate_values)
         if self.combine_replicates:
@@ -452,17 +464,20 @@ class Normalization(object):
                 self.normalization_plate_values = self.normalization_align_plates()
             if iteration == 0:
                 self.normalization_first_alignment = self.normalization_plate_values
+                self.first_alignment_medians, self.first_alignment_MAD_sigmas = self.compute_medians_MAD_sigmas()
 
             # XXX - shift control populations
             self.normalization_plate_values = self.normalization_shift_rows()
             self.normalization_plate_values = self.normalization_shift_columns()
+
+        self.normalization_medians, self.normalization_MAD_sigmas = self.compute_medians_MAD_sigmas()
 
         # XXX - record shifts applied
 
         self.need_renorm = False
 
     def save(self):
-        assert not os.path.exists(self.output_file), "Will not overwrite file %s"%(self.output_file)
+        assert not os.path.exists(self.output_file), "Will not overwrite file %s" % (self.output_file)
         self.run_normalization()
 
         # first, copy all pages from the existing book
