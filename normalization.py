@@ -509,21 +509,22 @@ class Normalization(object):
         # XXX - should write Well = Row+Column
         features = [self.replicate_features[repidx] for repidx in range(self.num_replicates)]
         orig_feature_names = [self.book.sheet_by_index(f[0]).row(0)[f[1]].value for f in features]
-        write_row(0, 0, "Plate", "Row", "Column", "Gene", *orig_feature_names)
+        write_row(0, 0, "Plate", "Well", "Gene", *orig_feature_names)
         offset = 1
         if self.bfx_format:
             import uuid
             orig_feature_ids = [str(self.book.sheet_by_index(f[0]).row(1)[f[1]].value) for f in features]
             new_feature_ids = dict([(orig_feature_id, str(uuid.uuid4().int)) for orig_feature_id in orig_feature_ids])
             new_feature_ids = [new_feature_ids[orig_feature_id] for orig_feature_id in orig_feature_ids]
-            write_row(1, 0, "", "", "", "", *new_feature_ids)
+            write_row(1, 0, "", "", "", *new_feature_ids)
             offset = 2
         for rowidx, (pl, r, c, g) in enumerate(zip(plates, rows, cols, genes)):
             vals = [get_normalized_value(pl, r, c, ridx) for ridx in range(self.num_replicates)]
-            write_row(rowidx + offset, 0, pl, r, c, g, *vals)
+            well = '%s%02d' % (r, int(c))
+            write_row(rowidx + offset, 0, pl, well, g, *vals)
 
         # Write per-replicate median and MAD of all wells, population, negative controls, positive controls
-        dest_column = len(vals) + 4 + 2 
+        dest_column = len(vals) + 4 + 2
         dest_row = [3]
         def write_summary(*vals):
             write_row(dest_row[0], dest_column, *vals)
@@ -538,7 +539,7 @@ class Normalization(object):
 
         # all wells
         write_summary("", "Median / MAD")
-        write_summary("", *["R%d"%(ridx + 1) for ridx in range(self.num_replicates)])
+        write_summary("", *["R%d" % (ridx + 1) for ridx in range(self.num_replicates)])
         meds = []
         sigma_MADs = []
         for ridx in range(self.num_replicates):
