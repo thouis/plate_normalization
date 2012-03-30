@@ -467,8 +467,10 @@ class Feature(wx.Panel):
         feature_column_selector = ColumnSelector(self, self.set_feature_column, [], self.normalization, callback_args=(self.num_replicates,))
         self.feature_column_sizer.Insert(self.num_replicates * 2, feature_column_selector, 0, wx.EXPAND)
         self.feature_column_sizer.Insert(self.num_replicates * 2 + 1, (1, 10), 0)
+        default_sheet = self.feature_column_sizer.Children[(self.num_replicates - 1) * 2].GetWindow().sheet_idx
         self.num_replicates += 1
         self.normalization.num_replicates = self.num_replicates
+        feature_column_selector.set_default_sheet(default_sheet)
         self.Layout()
 
     def remove_replicate(self, evt):
