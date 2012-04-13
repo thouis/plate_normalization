@@ -194,7 +194,8 @@ class MyFrame(wx.Frame):
                     raise StopProcessing
             try:
                 xmls_to_xls(self.parent_dir.dirname.Value, xmlfiles, outfile, callback,
-                            lookup_treatment(self.extract_from_DB.StringSelection) if (self.extract_from_DB.GetStringSelection() != "No") else None)
+                            lookup_treatment(self.extract_from_DB.StringSelection) if (self.extract_from_DB.GetStringSelection() != "No") else None,
+                            self.extract_from_DB.StringSelection)
             except StopProcessing:
                 pass
             progress.Destroy()
@@ -229,7 +230,7 @@ class MyFrame(wx.Frame):
 
 # XML parsing
 
-def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment):
+def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment, chemical_or_gene):
     xmls_to_xls.active = False
     xmls_to_xls.rowidx = 1  # start at 1, go back and write header
     rowvals = {}
@@ -282,9 +283,12 @@ def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment):
             # force these to be first
             lookup_feature_col('Plate')
             lookup_feature_col('Well')
-            if lookup_well_treatment is not None:
+            if chemical_or_gene is "Genes":
                 lookup_feature_col('Treatment')
                 lookup_feature_col('Target Sequence')
+            elif chemical_or_gene is "Chemicals":
+                lookup_feature_col('Treatment')
+                lookup_feature_col('Concentration')
             rowvals['Plate'] = parse_plate(platedir)
             # prefer well row/column, but use name if they are not valid
             if int(wellrow) > 0 and int(wellcol) > 0:
@@ -292,11 +296,14 @@ def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment):
             else:
                 rowvals['Well'] = wellname
             if lookup_well_treatment is not None:
-                treatment = lookup_well_treatment(platedir, wellrow, wellcol, target_sequence=True)
+                treatment = lookup_well_treatment(platedir, wellrow, wellcol, target_sequence=(chemical_or_gene is "Genes"), concentration=(chemical_or_gene is "Chemicals"))
                 # did we get a target sequence?
                 if isinstance(treatment, tuple):
                     rowvals['Treatment'] = treatment[0]
-                    rowvals['Target Sequence'] = treatment[1]
+                    if chemical_or_gene is "Genes":
+                        rowvals['Target Sequence'] = treatment[1]
+                    else:
+                        rowvals['Concentration'] = treatment[1]
                 else:
                     rowvals['Treatment'] = treatment
 

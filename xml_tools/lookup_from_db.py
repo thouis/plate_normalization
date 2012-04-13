@@ -39,7 +39,8 @@ def get_plateid(platedir):
             raise ValueError('Could not find plate from directory name %s' % (platedir))
     return platedir_to_plateid[platedir]
 
-def lookup_genes(platedir, wellrow, wellcol, target_sequence=False):
+def lookup_genes(platedir, wellrow, wellcol, target_sequence=False, concentration=False):
+    assert concentration == False
     init()
     if not target_sequence:
         cursor.execute('''SELECT DUPLEX_NAME, DUPLEX_NUMBER FROM SI_RNA JOIN SI_RNA_WELL USING (SI_RNA_ID)
@@ -55,15 +56,15 @@ def lookup_genes(platedir, wellrow, wellcol, target_sequence=False):
         return ','.join([('%s#%d' % (g, n)) for g, n, ts in vals]), ','.join([ts for g, n, ts in vals])
 
 
-def lookup_chemicals(platedir, wellrow, wellcol, target_sequence=False):
+def lookup_chemicals(platedir, wellrow, wellcol, target_sequence=False, concentration=False):
+    assert target_sequence == False
     init()
-    cursor.execute('''SELECT CHEMICAL_NAME FROM CHEMICAL JOIN CHEMICAL_WELL USING (CHEMICAL_ID)
+    cursor.execute('''SELECT CHEMICAL_NAME, CONCENTRATION_VALUE, UNIT_NAME FROM CHEMICAL JOIN CHEMICAL_WELL USING (CHEMICAL_ID)
+                      JOIN UNIT ON UNIT.UNIT_ID = CONCENTRATION_UNIT_ID
                       JOIN WELL USING (WELL_ID) JOIN PLATE USING (PLATE_ID) WHERE PLATE_ID=%d and WELL_ROW=%s and WELL_COL=%s''' %
                    (get_plateid(platedir), wellrow, wellcol))
-    if target_sequence:
-        return ','.join(['%s' % (c[0]) for c in cursor.fetchall()]), None
-    else:
-        return ','.join(['%s' % (c[0]) for c in cursor.fetchall()])
+    v = cursor.fetchall()
+    return ', '.join(['%s' % c for c, _, _ in v]), ', '.join(unicode(str(con)) + ' ' + un.decode('latin-1') for _, con, un in v)
 
 
 def lookup_treatment(t):
@@ -77,5 +78,5 @@ def lookup_treatment(t):
 
 if __name__ == '__main__':
     print lookup_genes('384_20X_Dapi_Alexa_cy3_2010-0445_1', 1, 1)
-    print lookup_chemicals('384_20X_Dapi_Alexa_cy3_2010-0445_1', 1, 1)
+    print lookup_chemicals('20110041', 1, 1)
     print get_plateid('384_10X_Dapi_Alexa_20100331_1')
