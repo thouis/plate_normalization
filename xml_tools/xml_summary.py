@@ -235,6 +235,8 @@ def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment, 
     xmls_to_xls.rowidx = 1  # start at 1, go back and write header
     rowvals = {}
 
+    assert chemical_or_gene in ["No", "Genes", "Chemicals"]
+
     class StopParsing(Exception):
         pass
 
@@ -283,10 +285,10 @@ def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment, 
             # force these to be first
             lookup_feature_col('Plate')
             lookup_feature_col('Well')
-            if chemical_or_gene is "Genes":
+            if chemical_or_gene == "Genes":
                 lookup_feature_col('Treatment')
                 lookup_feature_col('Target Sequence')
-            elif chemical_or_gene is "Chemicals":
+            elif chemical_or_gene == "Chemicals":
                 lookup_feature_col('Treatment')
                 lookup_feature_col('Concentration')
             rowvals['Plate'] = parse_plate(platedir)
@@ -296,11 +298,11 @@ def xmls_to_xls(parent_dir, xmlfiles, outfile, callback, lookup_well_treatment, 
             else:
                 rowvals['Well'] = wellname
             if lookup_well_treatment is not None:
-                treatment = lookup_well_treatment(platedir, wellrow, wellcol, target_sequence=(chemical_or_gene is "Genes"), concentration=(chemical_or_gene is "Chemicals"))
+                treatment = lookup_well_treatment(platedir, wellrow, wellcol, target_sequence=(chemical_or_gene == "Genes"), concentration=(chemical_or_gene == "Chemicals"))
                 # did we get a target sequence?
                 if isinstance(treatment, tuple):
                     rowvals['Treatment'] = treatment[0]
-                    if chemical_or_gene is "Genes":
+                    if chemical_or_gene == "Genes":
                         rowvals['Target Sequence'] = treatment[1]
                     else:
                         rowvals['Concentration'] = treatment[1]
