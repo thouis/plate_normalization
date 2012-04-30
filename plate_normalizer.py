@@ -1006,9 +1006,10 @@ class ControlPlatemap(PlatePlot):
 
         # find control groups
         control_indices, control_names = self.normalization.fetch_control_groups()
+
         # get the colormap, and colors for each value
         cmap = self.grid[0].get_images()[0].get_cmap()
-        rgb_values = cmap(np.arange(0.0, len(control_names)) / len(control_names))
+        rgb_values = cmap(control_indices / float(len(control_names)))
         # create proxies
         proxies = [Rectangle((0, 0), 1, 1, fc=rgb) for rgb in rgb_values]
         # add legend above first plot
