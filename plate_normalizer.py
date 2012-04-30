@@ -10,6 +10,7 @@ from wrapfilename import wrap_filename
 import wxplotpanel
 import traceback
 import numpy as np
+from  matplotlib.patches import Rectangle
 from errordialog import display_error_dialog
 try:
     from collections import OrderedDict
@@ -660,7 +661,7 @@ class PlatePlot(Plot):
         self.pre_draw()
         plotidx = 0
         bad_data = False
-        grid = self.image_grid(self.get_num_plates(), self.get_num_replicates())
+        self.grid = grid = self.image_grid(self.get_num_plates(), self.get_num_replicates())
         lo = np.inf
         hi = -np.inf
         for plate_index in range(self.get_num_plates()):
@@ -1003,6 +1004,24 @@ class ControlPlatemap(PlatePlot):
     def do_draw(self):
         PlatePlot.do_draw(self)
 
+        # find control groups
+        control_indices, control_names = self.normalization.fetch_control_groups()
+        # get the colormap, and colors for each value
+        cmap = self.grid[0].get_images()[0].get_cmap()
+        rgb_values = cmap(np.arange(0.0, len(control_names)) / len(control_names))
+        # create proxies
+        proxies = [Rectangle((0, 0), 1, 1, fc=rgb) for rgb in rgb_values]
+        # add legend above first plot
+        legend = self.grid[0].legend(proxies, control_names, 
+                                     loc='upper center', scatterpoints=1,
+                                     ncol=4, mode="expand", frameon=False,
+                                     bbox_to_anchor=(0, 0, 1, 1), bbox_transform=self.figure.transFigure,
+                                     title='Controls')
+
+        # set legend font size
+        for t in legend.get_texts():
+            t.set_fontsize('small')
+
     def pre_draw(self):
         self.normalization.run_normalization()
 
@@ -1011,9 +1030,6 @@ class ControlPlatemap(PlatePlot):
 
     def get_plate(self, plate_index, rep):
         return self.normalization.normalization_control_groups[self.normalization.plate_names()[plate_index]]
-
-    def post_draw(self, bad_data):
-        self.figure.suptitle('Controls')
 
 
 class Plots(wx.Panel):
