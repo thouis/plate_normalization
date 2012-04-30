@@ -1009,13 +1009,14 @@ class ControlPlatemap(PlatePlot):
 
         # get the colormap, and colors for each value
         cmap = self.grid[0].get_images()[0].get_cmap()
-        rgb_values = cmap(control_indices / float(len(control_names)))
+        rgb_values = cmap(np.linspace(0, 1, len(control_names)))
         # create proxies
         proxies = [Rectangle((0, 0), 1, 1, fc=rgb) for rgb in rgb_values]
+        control_names = [c.replace('\n', '') for c in control_names]
         # add legend above first plot
         legend = self.grid[0].legend(proxies, control_names, 
                                      loc='upper center', scatterpoints=1,
-                                     ncol=4, mode="expand", frameon=False,
+                                     ncol=2, mode="expand", frameon=False,
                                      bbox_to_anchor=(0, 0, 1, 1), bbox_transform=self.figure.transFigure,
                                      title='Controls')
 
