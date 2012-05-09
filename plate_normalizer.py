@@ -96,7 +96,7 @@ class ColumnSelector(wx.Panel):
         self.column_selector.AppendItems(column_names)
         self.prev_colidx = None
         default = min([idx for idx, name in enumerate(column_names)
-                       if any([hint in name.lower() for hint in self.substring_hints])]
+                       if any([hint.lower() in name.lower() for hint in self.substring_hints])]
                       or [-1])
         if default > -1:
             self.column_selector.Selection = default
@@ -465,7 +465,13 @@ class Feature(wx.Panel):
         self.normalization.set_replicate_feature(replicate_index, val)
 
     def add_replicate(self, evt):
-        feature_column_selector = ColumnSelector(self, self.set_feature_column, [], self.normalization, callback_args=(self.num_replicates,))
+        default_column = self.feature_column_sizer.Children[(self.num_replicates - 1) * 2].GetWindow().column_selector.StringSelection
+        if default_column.endswith('%d' % self.num_replicates):
+            w = len('%d' % self.num_replicates)
+            hints = [default_column[:-w] + ('%d' % (self.num_replicates + 1))]
+        else:
+            hints = []
+        feature_column_selector = ColumnSelector(self, self.set_feature_column, hints, self.normalization, callback_args=(self.num_replicates,))
         self.feature_column_sizer.Insert(self.num_replicates * 2, feature_column_selector, 0, wx.EXPAND)
         self.feature_column_sizer.Insert(self.num_replicates * 2 + 1, (1, 10), 0)
         default_sheet = self.feature_column_sizer.Children[(self.num_replicates - 1) * 2].GetWindow().sheet_idx
