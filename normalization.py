@@ -68,7 +68,8 @@ def fix_nans(shift_vals):
     # we take the normalization from the nearest non-nan rows/columns
     shift_vals = shift_vals.copy()
     bad = ~ np.isfinite(shift_vals)
-    assert not all(bad)
+    if all(bad):
+        return None
     while any(bad):
         up = np.roll(shift_vals, 1)
         down = np.roll(shift_vals, -1)
@@ -365,7 +366,11 @@ class Normalization(object):
             controls = (stacker([self.normalization_control_maps[pl] for pl, _ in self.normalization_plate_values.keys()]) != CONTROL_POPULATION)
             all_plates[controls] = np.nan
             # use conservative_nanmedian to avoid taking median of too few values
-            offsets = fix_nans(conservative_nanmedian(all_plates, axis)).reshape(endshape)
+            offsets = fix_nans(conservative_nanmedian(all_plates, axis))
+            if offsets is None:  # too many NaNs to use conservative_nanmedian, try again.
+                offsets = fix_nans(nanmedian(all_plates, axis))
+                assert offsets is not None, "Too many bad values to correct row/column"
+            offsets = offsets.reshape(endshape)
             # shift offsets to zero-median to keep things identifiable
             offsets -= np.median(offsets)
             history += offsets
@@ -378,7 +383,11 @@ class Normalization(object):
                 controls = (stacker([self.normalization_control_maps[pl] for pl, rep in self.normalization_plate_values.keys() if repindex == rep]) != CONTROL_POPULATION)
                 rep_plates[controls] = np.nan
                 # use conservative_nanmedian to avoid taking median of too few values
-                offsets[repindex] = fix_nans(conservative_nanmedian(rep_plates, axis)).reshape(endshape)
+                offsets[repindex] = fix_nans(conservative_nanmedian(rep_plates, axis))
+                if offsets[repindex] is None:  # too many NaNs to use conservative_nanmedian, try again.
+                    offsets[repindex] = fix_nans(nanmedian(rep_plates, axis))
+                    assert offsets[repindex] is not None, "Too many bad values to correct row/column"
+                offsets[repindex] = offsets[repindex].reshape(endshape)
                 # shift offsets to zero-median to keep things identifiable
                 offsets[repindex] -= np.median(offsets[repindex])
                 history[repindex] += offsets[repindex]
