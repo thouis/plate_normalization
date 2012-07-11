@@ -1,5 +1,4 @@
-import xlrd
-import xlutils.copy
+import xlrd, xlwt
 import numpy as np
 from welltools import extract_row, extract_col
 from scipy.stats import nanmean, nanmedian
@@ -489,8 +488,14 @@ class Normalization(object):
         assert not os.path.exists(self.output_file), "Will not overwrite file %s" % (self.output_file)
         self.run_normalization()
 
-        # first, copy all pages from the existing book
-        outbook, results_sheet, provenance_sheet = duplicate_xlbook(self.book)
+        if not self.bfx_format:
+            # first, copy all pages from the existing book
+            outbook, results_sheet, provenance_sheet = duplicate_xlbook(self.book)
+        else:
+            # first, copy all pages from the existing book
+            outbook, results_sheet, provenance_sheet = \
+                create_bfx_reimport_xlbook(self.book, 
+                                           [feature[0] for feature in self.replicate_features.values()])
 
         # write out normalization values in order they appear in the plate/well columns
         plates = self.fetch_plates()
@@ -498,15 +503,18 @@ class Normalization(object):
         cols = self.fetch_cols()
         genes = self.fetch_genes()
 
-        def write_row(rowidx, basecol, *args):
+        def write_row(rowidx, basecol, format_after, xf, *args):
             for idx, v in enumerate(args):
-                results_sheet.write(rowidx, basecol + idx, v)
+                if idx >= format_after and xf is not None:
+                    results_sheet.write(rowidx, basecol + idx, v, xf)
+                else:
+                    results_sheet.write(rowidx, basecol + idx, v)
 
         def get_normalized_value(pl, r, c, repidx):
             try:
                 v = self.normalization_plate_values[pl, repidx][ord(r) - ord('A'), int(c) - 1]
                 if np.isfinite(v):
-                    return v
+                    return float(v)
                 if np.isnan(v):
                     return 'NaN'
                 if v > 0:
@@ -518,25 +526,27 @@ class Normalization(object):
         # XXX - should write Well = Row+Column
         features = [self.replicate_features[repidx] for repidx in range(self.num_replicates)]
         orig_feature_names = [self.book.sheet_by_index(f[0]).row(0)[f[1]].value for f in features]
-        write_row(0, 0, "Plate", "Well", "Gene", *orig_feature_names)
+        write_row(0, 0, 0, None, "Plate", "Well", "Gene", *orig_feature_names)
         offset = 1
+        xf = None
         if self.bfx_format:
             import uuid
             orig_feature_ids = [str(self.book.sheet_by_index(f[0]).row(1)[f[1]].value) for f in features]
             new_feature_ids = dict([(orig_feature_id, str(uuid.uuid4().int)) for orig_feature_id in orig_feature_ids])
             new_feature_ids = [new_feature_ids[orig_feature_id] for orig_feature_id in orig_feature_ids]
-            write_row(1, 0, "", "", "", *new_feature_ids)
+            write_row(1, 0, 0, None, "", "", "", *new_feature_ids)
             offset = 2
+            xf = xlwt.easyxf(num_format_str="#,##0.00")
         for rowidx, (pl, r, c, g) in enumerate(zip(plates, rows, cols, genes)):
             vals = [get_normalized_value(pl, r, c, ridx) for ridx in range(self.num_replicates)]
-            well = '%s%02d' % (r, int(c))
-            write_row(rowidx + offset, 0, pl, well, g, *vals)
+            well = '%s - %02d' % (r, int(c))
+            write_row(rowidx + offset, 0, 3, xf, pl, well, g, *vals)
 
         # Write per-replicate median and MAD of all wells, population, negative controls, positive controls
         dest_column = len(vals) + 4 + 2
         dest_row = [3]
         def write_summary(*vals):
-            write_row(dest_row[0], dest_column, *vals)
+            write_row(dest_row[0], dest_column, 0, None, *vals)
             dest_row[0] += 1
 
         # fetch values
@@ -588,7 +598,7 @@ class Normalization(object):
         else:
             # XXX - check ids are the same
             parent_features_id = [self.book.sheet_by_index(f[0]).row(1)[f[1]].value for f in features]
-            provenance = ([["Normalization - %s" % (feature_names[0][1]), datetime.date.today().isoformat(), getpass.getuser()],
+            provenance = ([["Normalization - %s" % (feature_names[0][1]), datetime.date.today().strftime("%d-%m-%Y"), getpass.getuser()],
                            [""],
                            ["type", "Normalization"],
                            ["name", results_sheet.name],
@@ -603,7 +613,7 @@ class Normalization(object):
 
         for idx, l in enumerate(provenance):
             for c, v in enumerate(l):
-                provenance_sheet.write(nrows + 1 + idx, c, v)
+                provenance_sheet.write(nrows + idx, c, v)
 
         outbook.save(self.output_file)
 
@@ -618,10 +628,6 @@ def duplicate_xlbook(book):
 
     provenance_sheet_name = 'BFX Provenance Tracking'
     add_provenance_sheet = (provenance_sheet_name not in existing_sheets)
-
-    # place the results sheet last, unless the BFX provenance sheet is
-    # last, in which case, just before it.
-    normalization_sheet_last = (existing_sheets[-1] != provenance_sheet_name)
 
     from xlutils.filter import process, XLRDReader, XLWTWriter
     import xlwt
@@ -656,3 +662,59 @@ def duplicate_xlbook(book):
             break
 
     return w.output[0][1], w.normalization_sheet, outbook.get_sheet(provenance_sheet_idx)
+
+def create_bfx_reimport_xlbook(book, feature_sheetidxs):
+    assert all([f == feature_sheetidxs[0] for f in feature_sheetidxs]), \
+        "All raw features must be on the same sheet for BFX format"
+
+    normalization_sheet_name = 'Normalization 1'
+    provenance_sheet_name = 'BFX Provenance Tracking'
+
+    from xlutils.filter import process, XLRDReader, XLWTWriter, BaseFilter
+    import xlwt
+
+    class OnlyRelevantSheet(BaseFilter):
+        def __init__(self):
+            self.__on = False
+
+        def sheet(self, rdsheet, wtsheet_name):
+            if rdsheet == book.sheet_by_index(feature_sheetidxs[0]):
+                self.__on = True
+                # only write this sheet
+                self.next.sheet(rdsheet, wtsheet_name)
+            else:
+                self.__on = False
+                # no call
+
+        def set_rdsheet(self,rdsheet):
+            self.next.sheet(rdsheet,wtsheet_name)
+
+        def row(self,rdrowx,wtrowx):
+            if self.__on:
+                self.next.row(rdrowx,wtrowx)
+
+        def cell(self,rdrowx,rdcolx,wtrowx,wtcolx):
+            if self.__on:
+                self.next.cell(rdrowx,rdcolx,wtrowx,wtcolx)
+
+    class WrapWT(XLWTWriter):
+        def sheet(self, rdsheet, wtsheet_name):
+            XLWTWriter.sheet(self, rdsheet, wtsheet_name)
+
+        def finish(self):
+            # add two new sheets at the end
+            self.normalization_sheet = self.wtbook.add_sheet(normalization_sheet_name)
+            self.provenance_sheet = self.wtbook.add_sheet(provenance_sheet_name)
+            XLWTWriter.finish(self)
+
+    # hackity hack - need to force non-ascii encoding
+    orig_Workbook_init = xlwt.Workbook.__init__
+    def replacement(self, encoding='utf-8', style_compression=0):
+        orig_Workbook_init(self, encoding, style_compression)
+    xlwt.Workbook.__init__ = replacement
+    w = WrapWT()
+    process(XLRDReader(book, 'unknown.xls'), OnlyRelevantSheet(), w)
+    outbook = w.output[0][1]
+    xlwt.Workbook.__init__ = orig_Workbook_init
+
+    return outbook, w.normalization_sheet, w.provenance_sheet
