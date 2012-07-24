@@ -1,21 +1,19 @@
 import sys
 import xml.parsers.expat
 
-print_all = 0
-depth = 0
-
 do_print = False
 
 def start_element(name, attrs):
     global do_print
-    if name == 'Filters':
+    if name == 'Well' and attrs['row'] == 'A' and attrs['col'] == '2':
         do_print = True
     if do_print:
         print name, attrs
 
 def end_element(name):
-    if name == 'Filters':
-        raise ValueError('foo')
+    global do_print
+    if name == 'Well':
+        do_print = False
 
 for f in sys.argv[1:]:
     try:
