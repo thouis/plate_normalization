@@ -9,7 +9,8 @@ def get_grouping(conn):
     # ignore result, we just need the description
     column_names = [col[0] for col in cursor.description]
     return [c for c in ['Image_Metadata_Plate', 'Image_Metadata_Well',
-                        'Image_Metadata_Row', 'Image_Metadata_Column']
+                        'Image_Metadata_Row', 'Image_Metadata_Column',
+                        'Image_Metadata_Barcode']
             if c in column_names]
 
 def get_cell_cols(conn):
