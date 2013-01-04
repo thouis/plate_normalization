@@ -25,8 +25,9 @@ def get_cell_cols(conn):
 def get_image_count_cols(conn):
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM Per_Image')
+    column_names = [col[0] for col in cursor.description]
     print "Counters", column_names
-    column_names = [col[0] for col in cursor.description if col[0].startswith('Count_')]
+    column_names = [c for c in column_names if c.startswith('Count_')]
     return column_names
 
 def summarize_data(conn, grouping_keys, summary_columns, count_columns):
