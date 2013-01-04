@@ -22,15 +22,23 @@ def get_cell_cols(conn):
     column_names.remove('ObjectNumber')
     return column_names
 
-def summarize_data(conn, grouping_keys, summary_columns):
+def get_image_count_cols(conn):
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM Per_Image')
+    column_names = [col[0] for col in cursor.description if col[0].startswith('Count_')]
+    return column_names
+
+def summarize_data(conn, grouping_keys, summary_columns, count_columns):
     cursor = conn.cursor()
     prefix = ", ".join("Per_Image.%s" % k for k in grouping_keys)
     all_groups = cursor.execute("SELECT %s from Per_Image" % prefix).fetchall()
     summarizer = ", ".join("AVG(Per_Object.%s)" % c for c in summary_columns)
+    counter = ", ".join("SUM(Per_Image.%s)" % c for c in count_columns)
+
     grouper = ", ".join("Per_Image.%s" % k for k in grouping_keys)
-    cursor.execute("SELECT %s, %s FROM Per_Image, Per_Object "
+    cursor.execute("SELECT %s, %s, %s FROM Per_Image, Per_Object "
                    "WHERE Per_Image.ImageNumber == Per_Object.ImageNumber "
-                   "GROUP BY %s" % (prefix, summarizer, grouper))
+                   "GROUP BY %s" % (prefix, summarizer, counter, grouper))
     missing_prefixes = set(all_groups)
     while True:
         v = cursor.fetchone()
@@ -40,7 +48,7 @@ def summarize_data(conn, grouping_keys, summary_columns):
         yield v
     for m in missing_prefixes:
         print "No Cells:", " ".join(m)
-        yield m + tuple([0] * len(summary_columns))
+        yield m + tuple([0] * len(summary_columns + count_columns))
 
 if __name__ == '__main__':
     in_db = sys.argv[1]
@@ -58,13 +66,14 @@ if __name__ == '__main__':
          "Need either Well or Row & Column in Image Metadata."
 
     summary_columns = get_cell_cols(conn)
+    count_columns = get_image_count_cols(conn)
 
     outbook = xlwt.Workbook(encoding='utf-8')
     sheet = outbook.add_sheet('Summary')
-    for colidx, header in enumerate(grouping_keys + ['Mean ' + c for c in summary_columns]):
+    for colidx, header in enumerate(grouping_keys + ['Mean ' + c for c in summary_columns] + count_columns):
         sheet.write(0, colidx, header)
 
-    for rowidx, rowvals in enumerate(summarize_data(conn, grouping_keys, summary_columns)):
+    for rowidx, rowvals in enumerate(summarize_data(conn, grouping_keys, summary_columns, count_columns)):
         for colidx, v in enumerate(rowvals):
             sheet.write(1 + rowidx, colidx, v)
 
