@@ -33,27 +33,39 @@ def get_image_count_cols(conn):
     column_names = [c for c in column_names if c.startswith('Image_Count_')]
     return column_names
 
-def summarize_data(conn, grouping_keys, summary_columns, count_columns):
+def count_objects(conn, grouping_keys, count_columns):
+    cursor = conn.cursor()
+    prefix = ", ".join("Per_Image.%s" % k for k in grouping_keys)
+    counter = ", ".join("SUM(Per_Image.%s)" % c for c in count_columns)
+    grouper = ", ".join("Per_Image.%s" % k for k in grouping_keys)
+    cursor.execute("SELECT %s, %s FROM Per_Image "
+                   "GROUP BY %s" % (prefix, counter, grouper)) 
+    counts = {}
+    for v in cursor.fetchall():
+        counts[v[:len(grouping_keys)]] = v[len(grouping_keys):]
+    return counts
+
+def summarize_data(conn, grouping_keys, summary_columns, count_columns, counts):
     cursor = conn.cursor()
     prefix = ", ".join("Per_Image.%s" % k for k in grouping_keys)
     all_groups = cursor.execute("SELECT %s from Per_Image" % prefix).fetchall()
     summarizer = ", ".join("AVG(Per_Object.%s)" % c for c in summary_columns)
-    counter = ", ".join("SUM(Per_Image.%s)" % c for c in count_columns)
     grouper = ", ".join("Per_Image.%s" % k for k in grouping_keys)
     if debug:
-        print ("SELECT %s, %s, %s FROM Per_Image, Per_Object "
+        print ("SELECT %s, %s FROM Per_Image, Per_Object "
                "WHERE Per_Image.ImageNumber == Per_Object.ImageNumber "
-               "GROUP BY %s" % (prefix, summarizer, counter, grouper))
-    cursor.execute("SELECT %s, %s, %s FROM Per_Image, Per_Object "
+               "GROUP BY %s" % (prefix, summarizer, grouper))
+    cursor.execute("SELECT %s, %s FROM Per_Image, Per_Object "
                    "WHERE Per_Image.ImageNumber == Per_Object.ImageNumber "
-                   "GROUP BY %s" % (prefix, summarizer, counter, grouper))
+                   "GROUP BY %s" % (prefix, summarizer, grouper))
     missing_prefixes = set(all_groups)
     while True:
         v = cursor.fetchone()
         if not v:
             break
         missing_prefixes -= set([v[:len(grouping_keys)]])
-        yield v
+        vcounts = counts.get(v[:len(grouping_keys)], [0] * len(count_columns))
+        yield v + vcounts
     for m in missing_prefixes:
         print "No Cells:", " ".join(m)
         yield m + tuple([0] * len(summary_columns + count_columns))
@@ -75,13 +87,14 @@ if __name__ == '__main__':
 
     summary_columns = get_cell_cols(conn)
     count_columns = get_image_count_cols(conn)
+    counts = count_objects(conn, grouping_keys, count_columns)
 
     outbook = xlwt.Workbook(encoding='utf-8')
     sheet = outbook.add_sheet('Summary')
     for colidx, header in enumerate(grouping_keys + ['Mean ' + c for c in summary_columns] + count_columns):
         sheet.write(0, colidx, header)
 
-    for rowidx, rowvals in enumerate(summarize_data(conn, grouping_keys, summary_columns, count_columns)):
+    for rowidx, rowvals in enumerate(summarize_data(conn, grouping_keys, summary_columns, count_columns, counts)):
         for colidx, v in enumerate(rowvals):
             sheet.write(1 + rowidx, colidx, v)
 
