@@ -5,7 +5,8 @@ do_print = False
 
 def start_element(name, attrs):
     global do_print
-    if name == 'Well' and attrs['row'] == 'A' and attrs['col'] == '2':
+    print "START", name, attrs
+    if name == 'Well' and 'row' in attrs and attrs['row'] == 'A' and attrs['col'] == '2':
         do_print = True
     if do_print:
         print name, attrs
@@ -24,4 +25,5 @@ for f in sys.argv[1:]:
         parser.EndElementHandler = end_element
         parser.ParseFile(open(f))
     except Exception, e:
+        print "exc", e
         pass

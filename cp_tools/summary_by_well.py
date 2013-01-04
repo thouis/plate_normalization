@@ -26,6 +26,7 @@ def get_image_count_cols(conn):
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM Per_Image')
     column_names = [col[0] for col in cursor.description if col[0].startswith('Count_')]
+    print "Counters", column_names
     return column_names
 
 def summarize_data(conn, grouping_keys, summary_columns, count_columns):
@@ -34,8 +35,10 @@ def summarize_data(conn, grouping_keys, summary_columns, count_columns):
     all_groups = cursor.execute("SELECT %s from Per_Image" % prefix).fetchall()
     summarizer = ", ".join("AVG(Per_Object.%s)" % c for c in summary_columns)
     counter = ", ".join("SUM(Per_Image.%s)" % c for c in count_columns)
-
     grouper = ", ".join("Per_Image.%s" % k for k in grouping_keys)
+    print ("SELECT %s, %s, %s FROM Per_Image, Per_Object "
+           "WHERE Per_Image.ImageNumber == Per_Object.ImageNumber "
+           "GROUP BY %s" % (prefix, summarizer, counter, grouper))
     cursor.execute("SELECT %s, %s, %s FROM Per_Image, Per_Object "
                    "WHERE Per_Image.ImageNumber == Per_Object.ImageNumber "
                    "GROUP BY %s" % (prefix, summarizer, counter, grouper))
