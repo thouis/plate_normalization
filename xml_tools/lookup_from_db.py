@@ -2,12 +2,13 @@ import MySQLdb
 
 
 class DB(object):
-    def __init__(*args):
+    def __init__(self, *args, **kwargs):
         self.args = args
+        self.kwargs = kwargs
         self.conn = None
 
     def connect(self):
-        self.conn = MySQLdb.connect(*args)
+        self.conn = MySQLdb.connect(*self.args, **self.kwargs)
 
     def query(self, sql):
         try:
