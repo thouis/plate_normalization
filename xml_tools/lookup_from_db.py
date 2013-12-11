@@ -10,7 +10,7 @@ class DB(object):
     def connect(self):
         self.conn = MySQLdb.connect(*self.args, **self.kwargs)
 
-    def query(self, sql):
+    def execute(self, sql):
         try:
             cursor = self.conn.cursor()
             cursor.execute(sql)
